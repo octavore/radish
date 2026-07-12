@@ -1,0 +1,4 @@
+.build/
+.strudel/
+.DS_Store
+*.dmg
