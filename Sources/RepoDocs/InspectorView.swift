@@ -5,6 +5,7 @@ import SwiftUI
 /// into `git cat-file -p` and get the same bytes back.
 struct InspectorView: View {
   let info: PageInfo?
+  var onDiff: (Revision) -> Void = { _ in }
 
   var body: some View {
     Group {
@@ -27,15 +28,25 @@ struct InspectorView: View {
               row("Last saved", modified.formatted(date: .abbreviated, time: .shortened))
             }
             ForEach(info.revisions.prefix(5)) { revision in
-              HStack(alignment: .firstTextBaseline) {
-                Text(String(revision.id.prefix(7)))
-                  .font(.system(.caption, design: .monospaced))
-                  .foregroundStyle(.secondary)
-                Text(revision.subject)
-                  .font(.caption)
-                  .lineLimit(1)
-                Spacer()
+              Button {
+                onDiff(revision)
+              } label: {
+                HStack(alignment: .firstTextBaseline) {
+                  Text(String(revision.id.prefix(7)))
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                  Text(revision.subject)
+                    .font(.caption)
+                    .lineLimit(1)
+                  Spacer()
+                  Image(systemName: "arrow.left.arrow.right")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
+                .contentShape(Rectangle())
               }
+              .buttonStyle(.plain)
+              .help("Diff against the current version")
             }
           }
         }

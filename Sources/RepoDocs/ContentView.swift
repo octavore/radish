@@ -16,8 +16,10 @@ struct ContentView: View {
     .navigationTitle(model.repo?.lastPathComponent ?? "RepoDocs")
     .navigationSubtitle(model.status)
     .inspector(isPresented: $model.showInspector) {
-      InspectorView(info: model.info)
-        .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
+      InspectorView(info: model.info) { revision in
+        Task { await model.showDiff(against: revision) }
+      }
+      .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
     }
     .toolbar {
       ToolbarItem(placement: .navigation) {
@@ -55,6 +57,15 @@ struct ContentView: View {
       }
     }
     .sheet(isPresented: $isNaming) { newPageSheet }
+    .sheet(
+      isPresented: Binding(
+        get: { model.diff != nil },
+        set: { if !$0 { model.diff = nil } })
+    ) {
+      if let diff = model.diff {
+        DiffView(diff: diff)
+      }
+    }
     .alert(
       "Something went wrong",
       isPresented: Binding(

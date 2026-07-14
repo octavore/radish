@@ -15,6 +15,10 @@ final class AppModel {
   var showInspector = true
   var errorMessage: String?
 
+  /// Set when the user asks to diff the current page against a past revision;
+  /// presenting it drives a sheet in ContentView.
+  var diff: PageDiff?
+
   /// The editor's document. Its *string content is raw markdown source* — the
   /// editor highlights the source itself, so this must round-trip verbatim.
   /// Never construct it with `AttributedString(markdown:)`: that parses the
@@ -166,6 +170,17 @@ final class AppModel {
       text = AttributedString(content)
       isDirty = false
       info = try await run { try store.info(for: path) }
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  /// Diffs the current page's content at `revision` against its current tip.
+  func showDiff(against revision: Revision) async {
+    guard let store, let path = selection else { return }
+    do {
+      let text = try await run { try store.diff(path: path, from: revision.id) }
+      diff = PageDiff(path: path, revision: revision, text: text)
     } catch {
       errorMessage = error.localizedDescription
     }

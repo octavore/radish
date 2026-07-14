@@ -159,6 +159,24 @@ final class DocStoreTests: XCTestCase {
     XCTAssertTrue(theirSide.contains("THEIRS"))
   }
 
+  func testDiffShowsChangesBetweenARevisionAndTheCurrentTip() throws {
+    try store.write(path: "doc.md", content: "line one\nline two\n")
+    let firstRevision = try store.history(of: "doc.md")[0]
+
+    try store.write(path: "doc.md", content: "line one\nline two changed\n")
+
+    let diff = try store.diff(path: "doc.md", from: firstRevision.id)
+    XCTAssertTrue(diff.contains("-line two"))
+    XCTAssertTrue(diff.contains("+line two changed"))
+  }
+
+  func testDiffAgainstTheCurrentTipIsEmpty() throws {
+    try store.write(path: "doc.md", content: "unchanged\n")
+    let revision = try store.history(of: "doc.md")[0]
+
+    XCTAssertEqual(try store.diff(path: "doc.md", from: revision.id), "")
+  }
+
   // MARK: - Helpers
 
   /// Builds a commit on top of `parent` with `path` set to `content`.

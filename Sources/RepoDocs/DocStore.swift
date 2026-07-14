@@ -47,6 +47,15 @@ enum MergeResult: Sendable {
   case conflicted([Conflict])
 }
 
+/// A unified diff of one page between a past revision and the current tip.
+struct PageDiff: Identifiable, Sendable {
+  var id: String { revision.id }
+  var path: String
+  var revision: Revision
+  /// Raw `git diff` output. Empty when the revision already matches the tip.
+  var text: String
+}
+
 struct Conflict: Identifiable, Sendable {
   var id: String { path }
   var path: String
@@ -139,6 +148,13 @@ struct DocStore: Sendable {
       tip: git.resolve(Self.pagesRef) ?? "",
       byteCount: size,
       revisions: try history(of: path))
+  }
+
+  /// Unified diff of a page between one historical revision and another
+  /// (the current tip by default). Revisions come from `history(of:)`, so
+  /// `oldRev` is always a commit on `pagesRef`'s own chain, not the repo's.
+  func diff(path: String, from oldRev: String, to newRev: String? = nil) throws -> String {
+    try git.text(["diff", "--no-color", oldRev, newRev ?? Self.pagesRef, "--", path])
   }
 
   func history(of path: String) throws -> [Revision] {
