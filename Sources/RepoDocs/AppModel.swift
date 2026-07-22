@@ -8,6 +8,9 @@ final class AppModel {
   private(set) var repo: URL?
   private(set) var pages: [Page] = []
   private(set) var tree: [DocNode] = []
+  /// Folders created via the sidebar's "New Folder" but not yet holding a
+  /// page — see `createFolder`. Client-side only; lost on refresh/reopen.
+  private(set) var pendingFolders: Set<String> = []
   private(set) var status: String = ""
   /// Git identity of the selected page, shown in the inspector. Nil for a
   /// folder row, which is a path prefix rather than a stored object.
@@ -19,12 +22,11 @@ final class AppModel {
   /// presenting it drives a sheet in ContentView.
   var diff: PageDiff?
 
-  /// The editor's document. Its *string content is raw markdown source* — the
-  /// editor highlights the source itself, so this must round-trip verbatim.
-  /// Never construct it with `AttributedString(markdown:)`: that parses the
-  /// syntax away, and a load→save cycle would rewrite every page into plain
-  /// prose and fill git history with phantom diffs.
-  var text = AttributedString("")
+  /// The editor's document: raw markdown source, verbatim. The editor
+  /// highlights this string itself, so it must round-trip exactly — a
+  /// load→save cycle must never rewrite it, or git history fills with
+  /// phantom diffs.
+  var text = ""
   private(set) var isDirty = false
 
   var selection: Page.ID? {
@@ -44,14 +46,9 @@ final class AppModel {
     }
   }
 
-  var source: String {
-    get { String(text.characters) }
-    set { text = AttributedString(newValue) }
-  }
-
   /// Binding handed to the editor. Edits mark the document dirty; loads from
-  /// git go through `setSource(fromDisk:)` and do not.
-  var editorText: Binding<AttributedString> {
+  /// git go through `loadSelection()` and do not.
+  var editorText: Binding<String> {
     Binding(
       get: { self.text },
       set: { new in
@@ -86,8 +83,9 @@ final class AppModel {
     selection = nil
     pages = []
     tree = []
+    pendingFolders = []
     info = nil
-    text = AttributedString("")
+    text = ""
     isDirty = false
 
     repo = url
@@ -101,7 +99,7 @@ final class AppModel {
     do {
       let found = try await run { try store.listPages() }
       pages = found
-      tree = DocTree.build(found)
+      tree = DocTree.build(found, pendingFolders: pendingFolders)
       if let selection, !found.contains(where: { $0.id == selection }) {
         self.selection = nil
       }
@@ -114,7 +112,7 @@ final class AppModel {
 
   func save() async {
     guard let store, let path = selection else { return }
-    let content = source
+    let content = text
     do {
       try await run { try store.write(path: path, content: content) }
       isDirty = false
@@ -145,6 +143,86 @@ final class AppModel {
     }
   }
 
+  /// Adds a folder to the sidebar without writing anything to git — the
+  /// store has no folder objects (see `DocTree`), so an empty folder can't
+  /// actually be persisted. This just seeds `pendingFolders`, which
+  /// `DocTree.build` folds into the tree; the folder becomes "real" the
+  /// moment a page is created inside it, and simply vanishes (never having
+  /// existed as far as git is concerned) if the repo is refreshed or
+  /// reopened before that happens.
+  func createFolder(path rawPath: String) {
+    let trimmed = rawPath
+      .trimmingCharacters(in: .whitespaces)
+      .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    guard !trimmed.isEmpty else { return }
+    pendingFolders.insert(trimmed + "/")
+    tree = DocTree.build(pages, pendingFolders: pendingFolders)
+  }
+
+  /// Imports existing markdown files already sitting in the repo's working
+  /// tree (or elsewhere on disk) into the page store. Directories are walked
+  /// recursively for `.md` files; a file's page path is its path relative to
+  /// the repo root, so an import round-trips back to the same tree shape.
+  /// Reading is plain `FileManager`/`String(contentsOf:)` off the working
+  /// tree — the store write goes through the usual §1 plumbing, so this never
+  /// touches the index or `HEAD`.
+  func importPaths(_ urls: [URL]) async {
+    guard let store, let repoRoot = repo else { return }
+    do {
+      let count = try await run { () -> Int in
+        let files = Self.collectMarkdownFiles(urls)
+        for file in files {
+          let relative = Self.relativePath(for: file, in: repoRoot)
+          let content = try String(contentsOf: file, encoding: .utf8)
+          try store.write(path: relative, content: content, message: "docs: import \(relative)")
+        }
+        return files.count
+      }
+      guard count > 0 else {
+        errorMessage = "No markdown files found to import."
+        return
+      }
+      await refresh()
+      status = "Imported \(count) page(s)"
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+  }
+
+  nonisolated private static func collectMarkdownFiles(_ urls: [URL]) -> [URL] {
+    let fm = FileManager.default
+    var result: [URL] = []
+    for url in urls {
+      var isDir: ObjCBool = false
+      guard fm.fileExists(atPath: url.path, isDirectory: &isDir) else { continue }
+      if isDir.boolValue {
+        let enumerator = fm.enumerator(
+          at: url, includingPropertiesForKeys: [.isDirectoryKey],
+          options: [.skipsHiddenFiles])
+        while let file = enumerator?.nextObject() as? URL {
+          if file.pathExtension.lowercased() == "md" {
+            result.append(file)
+          }
+        }
+      } else if url.pathExtension.lowercased() == "md" {
+        result.append(url)
+      }
+    }
+    return result
+  }
+
+  /// A file's page path is its path relative to the repo root, so importing
+  /// `docs/design/auth.md` lands at that same path in the store. Files
+  /// outside the repo tree fall back to their bare filename.
+  nonisolated private static func relativePath(for file: URL, in repoRoot: URL) -> String {
+    let rootPath = repoRoot.standardizedFileURL.path
+    let filePath = file.standardizedFileURL.path
+    if filePath.hasPrefix(rootPath + "/") {
+      return String(filePath.dropFirst(rootPath.count + 1))
+    }
+    return file.lastPathComponent
+  }
+
   func deleteSelection() async {
     guard let store, let path = selection else { return }
     do {
@@ -160,14 +238,14 @@ final class AppModel {
   /// pages, not a stored object, so there is neither content nor an OID for it.
   private func loadSelection() async {
     guard let store, let path = selection, pages.contains(where: { $0.path == path }) else {
-      text = AttributedString("")
+      text = ""
       info = nil
       isDirty = false
       return
     }
     do {
       let content = try await run { try store.read(path) }
-      text = AttributedString(content)
+      text = content
       isDirty = false
       info = try await run { try store.info(for: path) }
     } catch {

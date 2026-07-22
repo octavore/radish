@@ -170,6 +170,29 @@ struct DocStore: Sendable {
     }
   }
 
+  /// Last-modified time for every page, in one `git log` pass rather than one
+  /// per path — `history(of:)` walks the whole `pagesRef` history per call,
+  /// which is fine for a single page but O(pages × commits) across all of
+  /// them. Log is newest-first, so the first commit touching a path is its
+  /// most recent modification.
+  func lastModifiedTimes() throws -> [String: Date] {
+    guard git.resolve(Self.pagesRef) != nil else { return [:] }
+    let log = try git.text(["log", "--format=\u{1}%at", "--name-only", Self.pagesRef])
+    guard !log.isEmpty else { return [:] }
+
+    var result: [String: Date] = [:]
+    var currentDate: Date?
+    for line in log.split(separator: "\n", omittingEmptySubsequences: false) {
+      if line.hasPrefix("\u{1}") {
+        currentDate = TimeInterval(line.dropFirst()).map(Date.init(timeIntervalSince1970:))
+      } else if !line.isEmpty, let date = currentDate {
+        let path = String(line)
+        if result[path] == nil { result[path] = date }
+      }
+    }
+    return result
+  }
+
   // MARK: - Annotations
   //
   // Safe to use the notes porcelain here: the anchor is a real commit, which

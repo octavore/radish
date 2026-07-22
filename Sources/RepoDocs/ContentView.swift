@@ -1,11 +1,24 @@
+import AppKit
 import CharmingEditor
 import SwiftUI
+
+extension EditorColorScheme {
+  /// RepoDocs' editor palette. Each accent is one of SwiftUI's system colors,
+  /// so it's already dynamic (adapts to light/dark) with no extra work.
+  static let repoDocs = EditorColorScheme(
+    heading: .indigo,
+    code: .pink,
+    bold: .orange,
+    italic: .teal)
+}
 
 struct ContentView: View {
   @Bindable var model: AppModel
   @State private var commands = EditorCommands()
   @State private var isNaming = false
   @State private var newPath = ""
+  @State private var isNamingFolder = false
+  @State private var newFolderPath = ""
 
   var body: some View {
     NavigationSplitView {
@@ -41,6 +54,15 @@ struct ContentView: View {
       }
       ToolbarItem(placement: .primaryAction) {
         Button {
+          importFiles()
+        } label: {
+          Label("Import", systemImage: "square.and.arrow.down")
+        }
+        .disabled(model.repo == nil)
+        .help("Import existing markdown files or folders from the repo")
+      }
+      ToolbarItem(placement: .primaryAction) {
+        Button {
           model.showInspector.toggle()
         } label: {
           Label("Info", systemImage: "sidebar.trailing")
@@ -57,6 +79,7 @@ struct ContentView: View {
       }
     }
     .sheet(isPresented: $isNaming) { newPageSheet }
+    .sheet(isPresented: $isNamingFolder) { newFolderSheet }
     .sheet(
       isPresented: Binding(
         get: { model.diff != nil },
@@ -85,7 +108,9 @@ struct ContentView: View {
         systemImage: node.isFolder ? "folder" : "doc.text")
         .foregroundStyle(node.isFolder ? .secondary : .primary)
         .tag(node.id)
+        .contextMenu { newItemMenu(in: node.folderPrefix) }
     }
+    .contextMenu { newItemMenu(in: "") }
     .overlay {
       if model.repo == nil {
         ContentUnavailableView {
@@ -111,6 +136,7 @@ struct ContentView: View {
         .commands(commands)
         .editorFont(.monospaced)
         .editorFontSize(14)
+        .editorColorScheme(.repoDocs)
         .focusedSceneValue(\.editorCommands, commands)
     } else {
       ContentUnavailableView(
@@ -145,6 +171,68 @@ struct ContentView: View {
     let path = newPath
     isNaming = false
     Task { await model.createPage(path: path) }
+  }
+
+  private var newFolderSheet: some View {
+    VStack(alignment: .leading, spacing: 12) {
+      Text("New folder").font(.headline)
+      Text("A folder path, e.g. `design/proposals`. It isn't saved until a page is added inside it.")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      TextField("design/proposals", text: $newFolderPath)
+        .textFieldStyle(.roundedBorder)
+        .frame(width: 320)
+        .onSubmit(createFolder)
+      HStack {
+        Spacer()
+        Button("Cancel") { isNamingFolder = false }
+          .keyboardShortcut(.cancelAction)
+        Button("Create", action: createFolder)
+          .keyboardShortcut(.defaultAction)
+          .disabled(newFolderPath.trimmingCharacters(in: .whitespaces).isEmpty)
+      }
+    }
+    .padding(20)
+  }
+
+  private func createFolder() {
+    let path = newFolderPath
+    isNamingFolder = false
+    model.createFolder(path: path)
+  }
+
+  /// Sidebar right-click menu, offered both on a row (pre-filled with that
+  /// row's own folder, so items land alongside it) and on the list's empty
+  /// area (`prefix` is `""`, i.e. the repo root).
+  @ViewBuilder
+  private func newItemMenu(in prefix: String) -> some View {
+    Button("New Page…") {
+      newPath = prefix
+      isNaming = true
+    }
+    .disabled(model.repo == nil)
+    Button("New Folder…") {
+      newFolderPath = prefix
+      isNamingFolder = true
+    }
+    .disabled(model.repo == nil)
+  }
+
+  /// Lets the user pick markdown files or folders already sitting in the
+  /// repo's working tree (or anywhere else) and pull them into the page
+  /// store. Defaults to browsing from the repo root since that's the common
+  /// case: docs that predate this app and are still sitting in the tree.
+  private func importFiles() {
+    let panel = NSOpenPanel()
+    panel.canChooseFiles = true
+    panel.canChooseDirectories = true
+    panel.allowsMultipleSelection = true
+    panel.prompt = "Import"
+    panel.message = "Choose markdown files or folders to import as pages."
+    panel.directoryURL = model.repo
+    guard panel.runModal() == .OK else { return }
+    let urls = panel.urls
+    Task { await model.importPaths(urls) }
   }
 
 }

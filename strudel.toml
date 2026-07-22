@@ -4,6 +4,10 @@ bundle_id    = "com.breakfastlabs.repo-docs"
 version      = "0.1.0"
 build_number = "1"
 
+[build.icon]
+src        = "book.png"
+background = "#5c2018"
+
 # Signing is unconfigured for now, so `strudel build --unsigned` (axo build) is
 # the working path. To sign and notarize, add an [apple] section:
 #

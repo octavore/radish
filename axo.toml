@@ -1,7 +1,6 @@
 project_name = "repo-docs"
 
 [tasks]
-# Unsigned until an [apple] identity is configured in strudel.toml.
-build = "strudel build --unsigned"
-run = "strudel run --unsigned"
+build = "strudel build"
+run = "strudel run"
 test = "swift test"
