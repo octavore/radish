@@ -32,6 +32,12 @@ struct RepoDocsApp: App {
       RootView(repoURL: repoURL)
       // .frame(minWidth: 720, minHeight: 460)
     }
+    // No native title bar: the window's only chrome is `ContentView`'s own
+    // floating bar, which can scroll away with the document. A native toolbar
+    // spans the sidebar as well as the detail column and can't hide over just
+    // one of them, so the two can't be reconciled — this app picks the one
+    // that hides.
+    .windowStyle(.hiddenTitleBar)
     .commands {
       CommandGroup(after: .appInfo) {
         InstallCLICommand()
@@ -40,6 +46,9 @@ struct RepoDocsApp: App {
         OpenRepositoryCommand()
       }
       FormatCommands()
+    }
+    Settings {
+      SettingsView()
     }
   }
 }

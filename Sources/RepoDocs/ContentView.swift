@@ -15,17 +15,44 @@ extension EditorColorScheme {
 struct ContentView: View {
   @Bindable var model: AppModel
   @State private var commands = EditorCommands()
+  @AppStorage(AppSettings.themeKey) private var themeString = ""
+  @AppStorage(Typography.titleRatioDefaultsKey) private var titleRatio = Double(
+    Typography.defaultTitleRatio)
+  @AppStorage(Typography.codeRatioDefaultsKey) private var codeRatio = Double(
+    Typography.defaultCodeRatio)
   @State private var isNaming = false
   @State private var newPath = ""
   @State private var isNamingFolder = false
   @State private var newFolderPath = ""
+  /// Whether the floating doc toolbar is showing. Driven by scroll *direction*
+  /// rather than absolute position (see `handleScroll`): reading downward
+  /// tucks the bar away, and any deliberate scroll back up brings it straight
+  /// back, wherever in the document you happen to be.
+  @State private var showToolbar = true
+  @State private var columnVisibility = NavigationSplitViewVisibility.all
+  /// The last offset `handleScroll` saw, and how far the current unbroken run
+  /// in one direction has travelled. Plain properties on a class box, not
+  /// `@State`: they change on every scroll tick and only `showToolbar` should
+  /// ever invalidate the view.
+  @State private var scrollTracker = ScrollTracker()
+
+  /// Height reserved for `docToolbar`, both as the editor's top content inset
+  /// and as the distance the bar slides up by when hiding.
+  private static let toolbarHeight: CGFloat = 48
+
+  /// Shared by the sidebar toggle and the doc bar's leading inset so the two
+  /// move as one. Sidebar shows/hides are a size change rather than a spring
+  /// gesture, so an ease-out reads better than a bouncy default.
+  private static let sidebarAnimation = Animation.easeOut(duration: 0.25)
 
   var body: some View {
-    NavigationSplitView {
+    NavigationSplitView(columnVisibility: $columnVisibility) {
       sidebar
     } detail: {
       detail
     }
+    // Still set even though `.hiddenTitleBar` draws no title: it names the
+    // window in the Window menu and the ⌘-Tab window switcher.
     .navigationTitle(model.repo?.lastPathComponent ?? "RepoDocs")
     .navigationSubtitle(model.status)
     .inspector(isPresented: $model.showInspector) {
@@ -33,50 +60,10 @@ struct ContentView: View {
         Task { await model.showDiff(against: revision) }
       }
       .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
-    }
-    .toolbar {
-      ToolbarItem(placement: .navigation) {
-        Button {
-          model.chooseRepo()
-        } label: {
-          Label("Open Repository", systemImage: "folder")
-        }
-        .help("Open a different repository (⌘O)")
-      }
-      ToolbarItem(placement: .primaryAction) {
-        Button {
-          newPath = ""
-          isNaming = true
-        } label: {
-          Label("New Page", systemImage: "square.and.pencil")
-        }
-        .disabled(model.repo == nil)
-      }
-      ToolbarItem(placement: .primaryAction) {
-        Button {
-          importFiles()
-        } label: {
-          Label("Import", systemImage: "square.and.arrow.down")
-        }
-        .disabled(model.repo == nil)
-        .help("Import existing markdown files or folders from the repo")
-      }
-      ToolbarItem(placement: .primaryAction) {
-        Button {
-          model.showInspector.toggle()
-        } label: {
-          Label("Info", systemImage: "sidebar.trailing")
-        }
-      }
-      ToolbarItem(placement: .primaryAction) {
-        Button {
-          Task { await model.save() }
-        } label: {
-          Label("Save", systemImage: "arrow.down.doc")
-        }
-        .keyboardShortcut("s")
-        .disabled(!model.isDirty)
-      }
+      // The hidden title bar still reserves its safe area at the top of the
+      // inspector column, pushing the first section down. Reclaim it so the
+      // content starts flush under the window's top edge.
+      .ignoresSafeArea(.container, edges: .top)
     }
     .sheet(isPresented: $isNaming) { newPageSheet }
     .sheet(isPresented: $isNamingFolder) { newFolderSheet }
@@ -102,13 +89,12 @@ struct ContentView: View {
   }
 
   private var sidebar: some View {
-    List(model.tree, children: \.children, selection: $model.selection) { node in
-      Label(
-        node.name,
-        systemImage: node.isFolder ? "folder" : "doc.text")
-        .foregroundStyle(node.isFolder ? .secondary : .primary)
-        .tag(node.id)
-        .contextMenu { newItemMenu(in: node.folderPrefix) }
+    List(selection: $model.selection) {
+      if let repoName = model.repo?.lastPathComponent {
+        Section(repoName) { sidebarRows }
+      } else {
+        sidebarRows
+      }
     }
     .contextMenu { newItemMenu(in: "") }
     .overlay {
@@ -127,22 +113,174 @@ struct ContentView: View {
       }
     }
     .navigationSplitViewColumnWidth(min: 180, ideal: 220)
+    // NavigationSplitView adds its own toggle at the sidebar's top edge, which
+    // duplicates `docToolbar`'s. The floating bar owns that job.
+    .toolbar(removing: .sidebarToggle)
+  }
+
+  /// The folder/page outline itself, without the enclosing repo-name section.
+  @ViewBuilder
+  private var sidebarRows: some View {
+    OutlineGroup(model.tree, children: \.children) { node in
+      Label(
+        node.name,
+        systemImage: node.isFolder ? "folder" : "doc.text")
+        .foregroundStyle(node.isFolder ? .secondary : .primary)
+        .tag(node.id)
+        .contextMenu { newItemMenu(in: node.folderPrefix) }
+    }
+  }
+
+  private var detail: some View {
+    ZStack(alignment: .top) {
+      editorContent
+      docToolbar
+    }
+    // A hidden title bar still reserves its safe area. Reclaim it so the bar
+    // starts at the window's own top edge — the bar *is* this window's title
+    // bar, and the document scrolls under it from there.
+    .ignoresSafeArea(.container, edges: .top)
   }
 
   @ViewBuilder
-  private var detail: some View {
+  private var editorContent: some View {
     if model.selection != nil {
       MarkdownEditor(text: model.editorText)
         .commands(commands)
         .editorFont(.monospaced)
         .editorFontSize(14)
-        .editorColorScheme(.repoDocs)
+        .editorColorScheme(AppSettings.colorScheme(from: themeString))
+        .editorTitleRatio(titleRatio)
+        .editorCodeRatio(codeRatio)
+        .editorTopContentInset(Self.toolbarHeight)
+        .onScroll(handleScroll)
         .focusedSceneValue(\.editorCommands, commands)
+        // A freshly opened doc starts scrolled to its top, whatever the
+        // previous doc's offset was.
+        .onChange(of: model.selection) {
+          scrollTracker.reset()
+          showToolbar = true
+        }
     } else {
       ContentUnavailableView(
         "Nothing selected", systemImage: "doc.text",
         description: Text("Pick a page from the sidebar."))
     }
+  }
+
+  /// Decides whether the bar should be up, given the document's latest scroll
+  /// offset. Bear's feel comes from three rules:
+  ///
+  /// - near the top the bar is always up, whichever way you're moving;
+  /// - a *run* of downward scrolling longer than `hideAfter` tucks it away;
+  /// - a much shorter run back upward brings it back, so reaching for the
+  ///   toolbar mid-document costs one flick rather than a scroll to the top.
+  ///
+  /// The run resets whenever direction flips, so what matters is continuous
+  /// travel one way — not net travel since the document opened. Without that,
+  /// a long read down leaves such a large positive balance that scrolling back
+  /// up never crosses zero, which is what made the old version feel dead.
+  private func handleScroll(_ offset: CGFloat) {
+    let topZone: CGFloat = 24
+    let hideAfter: CGFloat = 32
+    let showAfter: CGFloat = 12
+
+    let delta = offset - scrollTracker.lastOffset
+    scrollTracker.lastOffset = offset
+    guard offset > topZone else {
+      scrollTracker.run = 0
+      if !showToolbar { showToolbar = true }
+      return
+    }
+    // Momentum scrolling emits a long tail of sub-point deltas; ignoring them
+    // keeps a settling scroll from nudging the run across a threshold.
+    guard abs(delta) > 0.5 else { return }
+    if delta.sign != scrollTracker.run.sign { scrollTracker.run = 0 }
+    scrollTracker.run += delta
+
+    if scrollTracker.run > hideAfter, showToolbar {
+      showToolbar = false
+    } else if scrollTracker.run < -showAfter, !showToolbar {
+      showToolbar = true
+    }
+  }
+
+  /// Floats over the top of the editor, its own bar rather than part of the
+  /// window's native toolbar, so it (background included) can fade away as
+  /// the doc scrolls beneath it — the native toolbar spans the sidebar too,
+  /// and can't fade only over the detail column.
+  private var docToolbar: some View {
+    HStack(spacing: 16) {
+      Button {
+        // One transaction for both the split view's divider and this bar's
+        // leading inset, so the bar slides with the sidebar instead of the
+        // inset animating on its own while the bar's width jumps.
+        withAnimation(Self.sidebarAnimation) {
+          columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
+        }
+      } label: {
+        Image(systemName: "sidebar.leading")
+      }
+      .help("Hide or show the sidebar")
+      VStack(alignment: .leading, spacing: 0) {
+        Text(model.repo?.lastPathComponent ?? "RepoDocs")
+          .font(.headline)
+        if !model.status.isEmpty {
+          Text(model.status)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+      }
+      .lineLimit(1)
+      Spacer()
+      Button {
+        newPath = ""
+        isNaming = true
+      } label: {
+        Image(systemName: "square.and.pencil")
+      }
+      .disabled(model.repo == nil)
+      .help("New Page")
+      Button {
+        importFiles()
+      } label: {
+        Image(systemName: "square.and.arrow.down")
+      }
+      .disabled(model.repo == nil)
+      .help("Import existing markdown files or folders from the repo")
+      Button {
+        model.showInspector.toggle()
+      } label: {
+        Image(systemName: "sidebar.trailing")
+      }
+      .help("Info")
+      Button {
+        Task { await model.save() }
+      } label: {
+        Image(systemName: "arrow.down.doc")
+      }
+      .keyboardShortcut("s")
+      .disabled(!model.isDirty)
+      .help("Save")
+    }
+    .buttonStyle(.borderless)
+    .imageScale(.large)
+    .padding(.trailing, 12)
+    // Collapsing the sidebar slides this bar over to the window's left edge,
+    // where the traffic lights are. Stand off far enough to clear them; with
+    // the sidebar out, they're the sidebar's problem instead.
+    .padding(.leading, columnVisibility == .detailOnly ? 100 : 12)
+    .animation(Self.sidebarAnimation, value: columnVisibility)
+    .frame(height: Self.toolbarHeight)
+    .background(.bar)
+    // Slides up out of the way as well as fading, so the document appears to
+    // scroll it off rather than having it dissolve in place. Hit testing goes
+    // with it: a faded-out bar must not keep swallowing clicks meant for the
+    // text underneath.
+    .offset(y: showToolbar ? 0 : -Self.toolbarHeight)
+    .opacity(showToolbar ? 1 : 0)
+    .allowsHitTesting(showToolbar)
+    .animation(.easeOut(duration: 0.2), value: showToolbar)
   }
 
   private var newPageSheet: some View {
@@ -235,6 +373,22 @@ struct ContentView: View {
     Task { await model.importPaths(urls) }
   }
 
+}
+
+/// Scroll bookkeeping for `ContentView.handleScroll`. A reference type held in
+/// `@State` so updating it on every scroll tick doesn't re-render the view —
+/// only the `showToolbar` flag it feeds should do that.
+@MainActor
+private final class ScrollTracker {
+  var lastOffset: CGFloat = 0
+  /// Signed distance travelled in the current unbroken direction; positive is
+  /// downward (into the document).
+  var run: CGFloat = 0
+
+  func reset() {
+    lastOffset = 0
+    run = 0
+  }
 }
 
 /// Carries the focused editor's command channel up to the app's Format menu.

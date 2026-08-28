@@ -1,0 +1,8 @@
+{
+  "CFBundleURLTypes": [
+    {
+      "CFBundleURLName": "com.breakfastlabs.repo-docs",
+      "CFBundleURLSchemes": ["repodocs"]
+    }
+  ]
+}

@@ -1,19 +1,12 @@
 [app]
 name         = "RepoDocs"
-bundle_id    = "com.breakfastlabs.repo-docs"
+bundle_id    = "com.breakfastlabs.repodocs"
 version      = "0.1.0"
 build_number = "1"
 
-[build.icon]
-src        = "book.png"
-background = "#5c2018"
+[build]
+info_json_path = "info.json"  # registers the repodocs:// URL scheme, see CLI.openRepo
 
-# Signing is unconfigured for now, so `strudel build --unsigned` (axo build) is
-# the working path. To sign and notarize, add an [apple] section:
-#
-# [apple]
-# identity     = "Developer ID Application: Your Name (XXXXXXXXXX)"
-# team_id      = "XXXXXXXXXX"
-# api_issuer   = "..."
-# api_key      = "..."
-# api_key_path = "AuthKey_....p8"
+[build.icon]
+src        = "treasure-chest.png"
+background = "#3d2817"
