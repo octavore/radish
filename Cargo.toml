@@ -1,0 +1,25 @@
+[workspace]
+members = ["crates/rd-core", "crates/rd"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+
+[workspace.dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+clml = "0"
+indoc = "2"
+tempfile = "3"
+thiserror = "2"
+tree-sitter = "0.25"
+tree-sitter-md = "0.5"
+uniffi = "0.29"
+
+[profile.release]
+lto = true
+# Debuginfo only: a full strip would take the staticlib's symbol table with it,
+# and the Swift app links against exactly those symbols.
+strip = "debuginfo"

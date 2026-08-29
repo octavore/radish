@@ -1,35 +1,45 @@
 import Foundation
 
 enum CLIInstallError: Error, LocalizedError {
-  case noExecutablePath
+  case missingBundledTool
   case pathNotWritable(String)
 
   var errorDescription: String? {
     switch self {
-    case .noExecutablePath: "Couldn't determine RepoDocs's own executable path"
+    case .missingBundledTool: "This copy of RepoDocs has no bundled 'rd' to install"
     case .pathNotWritable(let path): "Couldn't create \(path)"
     }
   }
 }
 
-/// Installs `rd`, a symlink back to this same executable, so the app doubles
-/// as a CLI: launched from Finder it's the GUI, launched from a terminal
-/// (see `CLI.shouldRun`) it lists and prints docs instead.
+/// Installs `rd`, a symlink to the Rust CLI that ships inside the app bundle at
+/// `Contents/MacOS/rd` (put there by `[[build.copy]]` in `strudel.toml`).
+///
+/// `rd` used to be a symlink back to this same executable, with the app
+/// deciding at launch whether it was a GUI or a CLI. It's now its own binary
+/// built from `crates/rd`, so the link points at that instead.
 enum CLIInstaller {
   private static var linkURL: URL {
     FileManager.default.homeDirectoryForCurrentUser
       .appending(path: ".local/bin/rd")
   }
 
+  /// The bundled CLI, a sibling of this app's own executable.
+  private static var toolURL: URL? {
+    guard let executable = Bundle.main.executableURL else { return nil }
+    let tool = executable.deletingLastPathComponent().appending(path: "rd")
+    return FileManager.default.isExecutableFile(atPath: tool.path) ? tool : nil
+  }
+
   static var isInstalled: Bool {
-    guard let target = Bundle.main.executablePath,
+    guard let target = toolURL,
       let resolved = try? FileManager.default.destinationOfSymbolicLink(atPath: linkURL.path)
     else { return false }
-    return resolved == target
+    return resolved == target.path
   }
 
   static func install() throws {
-    guard let target = Bundle.main.executablePath else { throw CLIInstallError.noExecutablePath }
+    guard let target = toolURL else { throw CLIInstallError.missingBundledTool }
 
     let binDir = linkURL.deletingLastPathComponent()
     do {
@@ -38,9 +48,14 @@ enum CLIInstaller {
       throw CLIInstallError.pathNotWritable(binDir.path)
     }
 
-    if FileManager.default.fileExists(atPath: linkURL.path) {
-      try FileManager.default.removeItem(at: linkURL)
+    // symlinkMetadata, not fileExists: a link pointing at a deleted target
+    // still occupies the name and still has to go.
+    if (try? FileManager.default.attributesOfItem(atPath: linkURL.path)) != nil
+      || (try? FileManager.default.destinationOfSymbolicLink(atPath: linkURL.path)) != nil
+    {
+      try? FileManager.default.removeItem(at: linkURL)
     }
-    try FileManager.default.createSymbolicLink(atPath: linkURL.path, withDestinationPath: target)
+    try FileManager.default.createSymbolicLink(
+      atPath: linkURL.path, withDestinationPath: target.path)
   }
 }

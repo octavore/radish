@@ -1,0 +1,20 @@
+[package]
+name = "rd"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "rd"
+path = "src/main.rs"
+
+[dependencies]
+rd-core = { path = "../rd-core" }
+
+anyhow.workspace = true
+clap.workspace = true
+clml.workspace = true
+indoc.workspace = true
+tempfile.workspace = true
+tree-sitter.workspace = true
+tree-sitter-md.workspace = true

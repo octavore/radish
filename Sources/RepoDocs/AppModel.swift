@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import RepoDocsCore
 import SwiftUI
 
 @MainActor
@@ -42,7 +43,7 @@ final class AppModel {
   init() {
     if let saved = UserDefaults.standard.string(forKey: Self.repoKey) {
       let url = URL(fileURLWithPath: saved)
-      if Git.isRepository(url) { open(url) }
+      if isRepository(path: url.path) { open(url) }
     }
   }
 
@@ -73,7 +74,7 @@ final class AppModel {
   }
 
   func open(_ url: URL) {
-    guard Git.isRepository(url) else {
+    guard let opened = try? DocStore(root: url.path) else {
       errorMessage = "\(url.lastPathComponent) is not a git repository."
       return
     }
@@ -89,7 +90,7 @@ final class AppModel {
     isDirty = false
 
     repo = url
-    store = DocStore(root: url)
+    store = opened
     UserDefaults.standard.set(url.path, forKey: Self.repoKey)
     Task { await refresh() }
   }
@@ -99,14 +100,14 @@ final class AppModel {
     do {
       let found = try await run { try store.listPages() }
       pages = found
-      tree = DocTree.build(found, pendingFolders: pendingFolders)
+      tree = buildTree(pages: found, pendingFolders: Array(pendingFolders))
       if let selection, !found.contains(where: { $0.id == selection }) {
         self.selection = nil
       }
       if selection == nil, let first = found.first { selection = first.id }
       status = found.isEmpty ? "No pages yet" : "\(found.count) page(s)"
     } catch {
-      errorMessage = error.localizedDescription
+      errorMessage = errorText(error)
     }
   }
 
@@ -114,14 +115,14 @@ final class AppModel {
     guard let store, let path = selection else { return }
     let content = text
     do {
-      try await run { try store.write(path: path, content: content) }
+      try await run { try store.write(path: path, content: content, message: nil) }
       isDirty = false
       status = "Saved \(path)"
       // The write minted a new blob and advanced the ref, so the inspector's
       // OIDs are now stale.
-      info = try await run { try store.info(for: path) }
+      info = try await run { try store.info(path: path) }
     } catch {
-      errorMessage = error.localizedDescription
+      errorMessage = errorText(error)
     }
   }
 
@@ -134,19 +135,20 @@ final class AppModel {
     do {
       try await run {
         try store.write(
-          path: path, content: "# \(Page(path: path).title)\n\n", message: "docs: create \(path)")
+          path: path, content: "# \(pageTitle(path: path))\n\n",
+          message: "docs: create \(path)")
       }
       await refresh()
       selection = path
     } catch {
-      errorMessage = error.localizedDescription
+      errorMessage = errorText(error)
     }
   }
 
   /// Adds a folder to the sidebar without writing anything to git — the
-  /// store has no folder objects (see `DocTree`), so an empty folder can't
+  /// store has no folder objects (see `tree.rs`), so an empty folder can't
   /// actually be persisted. This just seeds `pendingFolders`, which
-  /// `DocTree.build` folds into the tree; the folder becomes "real" the
+  /// `buildTree` folds into the tree; the folder becomes "real" the
   /// moment a page is created inside it, and simply vanishes (never having
   /// existed as far as git is concerned) if the repo is refreshed or
   /// reopened before that happens.
@@ -156,7 +158,7 @@ final class AppModel {
       .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     guard !trimmed.isEmpty else { return }
     pendingFolders.insert(trimmed + "/")
-    tree = DocTree.build(pages, pendingFolders: pendingFolders)
+    tree = buildTree(pages: pages, pendingFolders: Array(pendingFolders))
   }
 
   /// Imports existing markdown files already sitting in the repo's working
@@ -174,7 +176,8 @@ final class AppModel {
         for file in files {
           let relative = Self.relativePath(for: file, in: repoRoot)
           let content = try String(contentsOf: file, encoding: .utf8)
-          try store.write(path: relative, content: content, message: "docs: import \(relative)")
+          try store.write(
+            path: relative, content: content, message: "docs: import \(relative)")
         }
         return files.count
       }
@@ -185,7 +188,7 @@ final class AppModel {
       await refresh()
       status = "Imported \(count) page(s)"
     } catch {
-      errorMessage = error.localizedDescription
+      errorMessage = errorText(error)
     }
   }
 
@@ -230,7 +233,7 @@ final class AppModel {
       selection = nil
       await refresh()
     } catch {
-      errorMessage = error.localizedDescription
+      errorMessage = errorText(error)
     }
   }
 
@@ -244,12 +247,12 @@ final class AppModel {
       return
     }
     do {
-      let content = try await run { try store.read(path) }
+      let content = try await run { try store.read(path: path) }
       text = content
       isDirty = false
-      info = try await run { try store.info(for: path) }
+      info = try await run { try store.info(path: path) }
     } catch {
-      errorMessage = error.localizedDescription
+      errorMessage = errorText(error)
     }
   }
 
@@ -257,10 +260,12 @@ final class AppModel {
   func showDiff(against revision: Revision) async {
     guard let store, let path = selection else { return }
     do {
-      let text = try await run { try store.diff(path: path, from: revision.id) }
+      let text = try await run {
+        try store.diff(path: path, oldRev: revision.id, newRev: nil)
+      }
       diff = PageDiff(path: path, revision: revision, text: text)
     } catch {
-      errorMessage = error.localizedDescription
+      errorMessage = errorText(error)
     }
   }
 

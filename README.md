@@ -7,19 +7,42 @@ Inspiration:
 - https://lobste.rs/s/vmrnyd/git_notes_git_s_coolest_most_unloved
 - https://tylercipriani.com/blog/2022/11/19/git-notes-gits-coolest-most-unloved-feature/
 
+There are two front ends over one storage layer: the app, and `rd`, a terminal client. The storage layer itself is a Rust crate (`crates/rd-core`) that both link — `rd` as an ordinary dependency, the app through UniFFI — so the two can't drift apart.
+
 ## Build
 
 ```sh
-axo build     # strudel build --unsigned -> .build/dist/RepoDocs.app
+axo core      # build the Rust core, regenerate the Swift bindings
+axo build     # axo core, then strudel build -> .build/dist/RepoDocs.app
 axo run       # build and launch
-axo test      # swift test
+axo test      # cargo test
+axo cli       # just the `rd` binary
 ```
+
+`ARCHS="arm64 x86_64" axo core` produces a universal core.
 
 The markdown editor comes from [CharmingEditor](../strudel-markdown-editor), consumed as a local path dependency. It is upstream — we don't patch it from here.
 
+## `rd`
+
+```sh
+rd                       # list every doc
+rd list -t               # list, newest edited first
+rd cat design/auth.md    # print one (colorized on a tty)
+rd design/auth.md        # shorthand for `rd cat`
+rd edit design/auth.md   # $EDITOR; or `- ` for stdin, or a file path
+rd rm design/auth.md
+rd export [dir]          # dump every doc to a directory
+rd .                     # open this repo in the app
+rd install               # symlink ~/.local/bin/rd
+rd agent                 # usage notes for AI agents
+```
+
+`rd` ships inside `RepoDocs.app/Contents/MacOS/`; RepoDocs ▸ Install 'rd' Command Line Tool symlinks it onto your PATH.
+
 ## Where the docs are
 
-Two stores. `SPEC-storage.md` explains why they differ; the short version is that only one of them can safely be a real git note.
+Two stores. The storage spec (`rd cat docs/STORAGE.md`) explains why they differ; the short version is that only one of them can safely be a real git note.
 
 | | Ref | Keyed by |
 |---|---|---|
@@ -153,7 +176,7 @@ git log --notes=annotations
 
 It deletes notes whose annotated object no longer exists. Annotations are keyed by real commits, so they're normally safe — but if a commit gets rebased away, prune will silently delete your commentary on it. Prefer `git notes copy <old> <new>` to relocate it.
 
-This is also the reason **pages are not stored as notes**. Keying a page by a synthetic anchor object leaves that anchor unreachable in the object graph; `git gc` collects it, and `git notes prune` then deletes the page hanging off it — two routine maintenance commands that quietly destroy the store. Pages live in a reachable tree under `refs/docs/` precisely to sit outside that blast radius. `SPEC-storage.md` §2 has the demonstration.
+This is also the reason **pages are not stored as notes**. Keying a page by a synthetic anchor object leaves that anchor unreachable in the object graph; `git gc` collects it, and `git notes prune` then deletes the page hanging off it — two routine maintenance commands that quietly destroy the store. Pages live in a reachable tree under `refs/docs/` precisely to sit outside that blast radius. `docs/STORAGE.md` §2 has the demonstration.
 
 
 ## Credits

@@ -1,0 +1,20 @@
+[package]
+name = "rd-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "rd_core"
+# `lib` for the Rust CLI, `staticlib` for the Swift app to link, `cdylib` for
+# uniffi-bindgen's --library mode to introspect.
+crate-type = ["lib", "staticlib", "cdylib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+
+[dependencies]
+tempfile.workspace = true
+thiserror.workspace = true
+uniffi = { workspace = true, features = ["cli"] }

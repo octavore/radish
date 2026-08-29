@@ -1,3 +1,4 @@
+import RepoDocsCore
 import SwiftUI
 
 /// Renders a unified diff (as produced by `git diff --no-color`) with
@@ -14,6 +15,7 @@ struct DiffView: View {
         ContentUnavailableView(
           "No changes", systemImage: "checkmark.circle",
           description: Text("This revision matches the current version."))
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
         ScrollView {
           VStack(alignment: .leading, spacing: 0) {
@@ -39,7 +41,8 @@ struct DiffView: View {
         .font(.caption)
         .foregroundStyle(.secondary)
     }
-    .padding(12)
+    .padding(.horizontal, 16)
+    .padding(.vertical, 12)
     .frame(maxWidth: .infinity, alignment: .leading)
   }
 

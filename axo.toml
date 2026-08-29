@@ -1,6 +1,11 @@
 project_name = "repo-docs"
 
 [tasks]
-build = "strudel build"
-run = "strudel run"
-test = "swift test"
+core = "scripts/build-core.sh"
+build = [":core", "strudel build"]
+run = [":core", "strudel run"]
+# The storage-layer tests moved to Rust with the storage layer; the Swift
+# target is GUI-only now and `axo build` is what checks it compiles.
+test = "cargo test"
+cli = "cargo build --release -p rd"
+fmt = ["cargo clippy --fix --allow-dirty --allow-staged", "cargo +nightly fmt"]

@@ -10,3 +10,11 @@ info_json_path = "info.json"  # registers the repodocs:// URL scheme, see CLI.op
 [build.icon]
 src        = "treasure-chest.png"
 background = "#3d2817"
+
+# The `rd` CLI, built from crates/rd by scripts/build-core.sh. It rides along in
+# the bundle so RepoDocs ▸ Install 'rd' Command Line Tool has something to
+# symlink into ~/.local/bin (see CLIInstaller).
+[[build.copy]]
+src      = "target/uniffi/rd"
+dest_dir = "Contents/MacOS"
+sign     = true

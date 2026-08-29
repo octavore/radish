@@ -1,5 +1,6 @@
 import AppKit
 import CharmingEditor
+import RepoDocsCore
 import SwiftUI
 
 extension EditorColorScheme {

@@ -1,21 +1,10 @@
 import CharmingEditor
 import SwiftUI
 
-/// The real entry point. `rd`'s own executable is symlinked back to this same
-/// binary (see `CLIInstaller`), so launched from a terminal it behaves as the
-/// CLI instead of opening a window — `RepoDocsApp.main()` below is SwiftUI's
-/// own default entry point, reached only on the GUI path.
+/// The GUI. `rd` is a separate Rust binary riding along in
+/// `Contents/MacOS/rd` (see `CLIInstaller`), so this executable no longer has
+/// to decide at launch whether it's a terminal tool or an app.
 @main
-enum EntryPoint {
-  static func main() {
-    if CLI.shouldRun {
-      CLI.run()
-      return
-    }
-    RepoDocsApp.main()
-  }
-}
-
 struct RepoDocsApp: App {
   var body: some Scene {
     // The model lives in RootView, not here, so every window (and therefore
@@ -53,9 +42,9 @@ struct RepoDocsApp: App {
   }
 }
 
-/// RepoDocs ▸ Install 'rd' Command Line Tool. Symlinks this same executable
-/// to `~/.local/bin/rd`, mirroring how `code`/`subl` install their shell
-/// helpers.
+/// RepoDocs ▸ Install 'rd' Command Line Tool. Symlinks the `rd` binary bundled
+/// alongside this app to `~/.local/bin/rd`, mirroring how `code`/`subl` install
+/// their shell helpers.
 struct InstallCLICommand: View {
   @State private var installed = CLIInstaller.isInstalled
   @State private var errorMessage: String?

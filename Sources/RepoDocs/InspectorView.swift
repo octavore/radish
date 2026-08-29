@@ -1,3 +1,4 @@
+import RepoDocsCore
 import SwiftUI
 
 /// Shows where the selected page actually lives in git. The point is to make
@@ -12,7 +13,7 @@ struct InspectorView: View {
       if let info {
         Form {
           Section("Location") {
-            row("Ref", info.ref, mono: true)
+            row("Ref", info.reference, mono: true)
             row("Path", info.path, mono: true)
           }
 
