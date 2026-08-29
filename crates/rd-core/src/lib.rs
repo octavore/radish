@@ -3,8 +3,8 @@
 //! One implementation, two consumers: the `rd` CLI links this as an ordinary
 //! Rust crate, and the RepoDocs SwiftUI app links the staticlib through the
 //! UniFFI bindings generated from these `#[uniffi::export]` items. Everything
-//! the spec in `docs/STORAGE.md` describes lives here — the app and the CLI
-//! cannot drift apart.
+//! the spec in `docs/STORAGE.md` describes lives here, so the app and the CLI
+//! stay in sync.
 
 pub mod error;
 pub mod git;
@@ -34,7 +34,7 @@ pub fn discover_repository(path: String) -> Option<String> {
 }
 
 /// `design/auth.md` -> `auth`. Exported so Swift's `Page.title` and the CLI
-/// share one definition rather than two that agree today.
+/// share one definition.
 #[uniffi::export]
 pub fn page_title(path: String) -> String {
     Page::new(path).title()

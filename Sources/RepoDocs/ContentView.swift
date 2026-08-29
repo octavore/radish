@@ -26,9 +26,9 @@ struct ContentView: View {
   @State private var isNamingFolder = false
   @State private var newFolderPath = ""
   /// Whether the floating doc toolbar is showing. Driven by scroll *direction*
-  /// rather than absolute position (see `handleScroll`): reading downward
-  /// tucks the bar away, and any deliberate scroll back up brings it straight
-  /// back, wherever in the document you happen to be.
+  /// rather than absolute position (see `handleScroll`): scrolling down hides
+  /// the bar, and a deliberate scroll back up shows it again at any point in
+  /// the document.
   @State private var showToolbar = true
   @State private var columnVisibility = NavigationSplitViewVisibility.all
   /// The last offset `handleScroll` saw, and how far the current unbroken run
@@ -138,7 +138,7 @@ struct ContentView: View {
       docToolbar
     }
     // A hidden title bar still reserves its safe area. Reclaim it so the bar
-    // starts at the window's own top edge — the bar *is* this window's title
+    // starts at the window's own top edge; the bar *is* this window's title
     // bar, and the document scrolls under it from there.
     .ignoresSafeArea(.container, edges: .top)
   }
@@ -170,17 +170,17 @@ struct ContentView: View {
   }
 
   /// Decides whether the bar should be up, given the document's latest scroll
-  /// offset. Bear's feel comes from three rules:
+  /// offset. Three rules:
   ///
   /// - near the top the bar is always up, whichever way you're moving;
-  /// - a *run* of downward scrolling longer than `hideAfter` tucks it away;
-  /// - a much shorter run back upward brings it back, so reaching for the
-  ///   toolbar mid-document costs one flick rather than a scroll to the top.
+  /// - a *run* of downward scrolling longer than `hideAfter` hides it;
+  /// - a shorter run back upward brings it back, so reaching for the toolbar
+  ///   mid-document costs one flick rather than a scroll to the top.
   ///
   /// The run resets whenever direction flips, so what matters is continuous
-  /// travel one way — not net travel since the document opened. Without that,
-  /// a long read down leaves such a large positive balance that scrolling back
-  /// up never crosses zero, which is what made the old version feel dead.
+  /// travel one way, not net travel since the document opened. Tracking net
+  /// travel instead leaves a large positive balance after a long read down,
+  /// so scrolling back up never crosses zero and the bar never returns.
   private func handleScroll(_ offset: CGFloat) {
     let topZone: CGFloat = 24
     let hideAfter: CGFloat = 32
@@ -208,7 +208,7 @@ struct ContentView: View {
 
   /// Floats over the top of the editor, its own bar rather than part of the
   /// window's native toolbar, so it (background included) can fade away as
-  /// the doc scrolls beneath it — the native toolbar spans the sidebar too,
+  /// the doc scrolls beneath it. The native toolbar spans the sidebar too,
   /// and can't fade only over the detail column.
   private var docToolbar: some View {
     HStack(spacing: 16) {
@@ -268,16 +268,16 @@ struct ContentView: View {
     .imageScale(.large)
     .padding(.trailing, 12)
     // Collapsing the sidebar slides this bar over to the window's left edge,
-    // where the traffic lights are. Stand off far enough to clear them; with
-    // the sidebar out, they're the sidebar's problem instead.
+    // where the traffic lights are. Pad far enough to clear them; when the
+    // sidebar is visible it covers that area instead.
     .padding(.leading, columnVisibility == .detailOnly ? 100 : 12)
     .animation(Self.sidebarAnimation, value: columnVisibility)
     .frame(height: Self.toolbarHeight)
     .background(.bar)
-    // Slides up out of the way as well as fading, so the document appears to
-    // scroll it off rather than having it dissolve in place. Hit testing goes
-    // with it: a faded-out bar must not keep swallowing clicks meant for the
-    // text underneath.
+    // Slides up as well as fading, so the document appears to scroll it off
+    // rather than having it dissolve in place. Hit testing goes with it: a
+    // faded-out bar must not keep intercepting clicks meant for the text
+    // underneath.
     .offset(y: showToolbar ? 0 : -Self.toolbarHeight)
     .opacity(showToolbar ? 1 : 0)
     .allowsHitTesting(showToolbar)
@@ -377,7 +377,7 @@ struct ContentView: View {
 }
 
 /// Scroll bookkeeping for `ContentView.handleScroll`. A reference type held in
-/// `@State` so updating it on every scroll tick doesn't re-render the view —
+/// `@State` so updating it on every scroll tick doesn't re-render the view;
 /// only the `showToolbar` flag it feeds should do that.
 @MainActor
 private final class ScrollTracker {
@@ -393,7 +393,7 @@ private final class ScrollTracker {
 }
 
 /// Carries the focused editor's command channel up to the app's Format menu.
-/// Written out longhand rather than with `@Entry`, which needs macOS 15 — this
+/// Written out longhand rather than with `@Entry`, which needs macOS 15; this
 /// app deploys to 14.
 private struct EditorCommandsKey: FocusedValueKey {
   typealias Value = EditorCommands

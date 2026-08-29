@@ -1,7 +1,7 @@
 //! Colorizes markdown source for terminal display (`rd cat`), using the same
-//! tree-sitter grammar `CharmingEditor` uses to highlight the doc in the GUI —
-//! a real parse rather than a regex approximation, so nesting, code fences, and
-//! links are handled the way the editor itself understands them.
+//! tree-sitter grammar `CharmingEditor` uses to highlight the doc in the GUI.
+//! A real parse rather than a regex approximation, so nesting, code fences, and
+//! links are handled correctly.
 //!
 //! tree-sitter-markdown is a "split" grammar: the block parser leaves each
 //! paragraph's content as an unparsed `inline` node, which is re-parsed with
@@ -44,8 +44,8 @@ struct Span {
     styles: &'static [Style],
 }
 
-/// Returns `source` unchanged if the grammar fails to parse — a `cat` should
-/// never fail or garble content just because coloring didn't work out.
+/// Returns `source` unchanged if the grammar fails to parse: coloring must
+/// never make `cat` fail or garble content.
 pub fn colorize(source: &str) -> String {
     let Some(blocks) = parse(source, tree_sitter_md::LANGUAGE.into()) else {
         return source.to_string();
@@ -133,10 +133,9 @@ fn walk_inline(node: Node, base: usize, spans: &mut Vec<Span>) {
 }
 
 /// Slices the text at every span boundary and, for each slice, re-applies the
-/// styles of every span covering it — simpler than tracking opens/closes
+/// styles of every span covering it. Simpler than tracking opens and closes
 /// incrementally, and correct even when spans nest (a code span inside a
-/// heading) since each slice's styling is recomputed from scratch rather than
-/// layered onto whatever came before.
+/// heading), because each slice's styling is recomputed from scratch.
 fn render(source: &str, spans: &[Span]) -> String {
     if spans.is_empty() || source.is_empty() {
         return source.to_string();

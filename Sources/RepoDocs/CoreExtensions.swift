@@ -1,9 +1,9 @@
 import Foundation
 import RepoDocsCore
 
-// Conveniences over the UniFFI-generated types in `RepoDocsCore`. Everything
-// here is presentation-side sugar — identity for SwiftUI, and error text for
-// alerts. The storage behaviour itself lives in Rust, in `crates/rd-core`.
+// Conveniences over the UniFFI-generated types in `RepoDocsCore`: identity for
+// SwiftUI, and error text for alerts. The storage behaviour itself lives in
+// Rust, in `crates/rd-core`.
 
 extension Page: Identifiable {
   public var id: String { path }
@@ -51,7 +51,7 @@ struct PageDiff: Identifiable, Sendable {
 /// Text for an error alert.
 ///
 /// UniFFI does conform `StoreError` to `LocalizedError`, but its generated
-/// `errorDescription` is `String(reflecting: self)` — the Swift case name
+/// `errorDescription` is `String(reflecting: self)`: the Swift case name
 /// wrapped around the real text (`StoreError.Git(message: "git … failed")`).
 /// Since that conformance lives in the declaring module, an extension here
 /// can't replace it, so unwrap the case explicitly instead.

@@ -1,7 +1,7 @@
-//! `rd` — read and write a repository's docs from a terminal.
+//! `rd`: read and write a repository's docs from a terminal.
 //!
 //! Every storage operation goes through `rd_core`, the same crate the RepoDocs
-//! app links through UniFFI, so the CLI and the GUI cannot drift apart.
+//! app links through UniFFI, so the CLI and the GUI stay in sync.
 
 mod agent;
 mod markdown;
@@ -159,7 +159,7 @@ fn cat(store: &DocStore, path: &str) -> Result<()> {
 
 /// Writes a page from `file`, from stdin when `file` is `-`, or by opening
 /// `$EDITOR` on the page's current content when no file is given. Creates the
-/// page if it doesn't exist yet, same as `DocStore::write` — there is no
+/// page if it doesn't exist yet, same as `DocStore::write`. There is no
 /// separate "new" command.
 fn edit(store: &DocStore, path: &str, file: Option<&str>) -> Result<()> {
     let content = match file {
@@ -227,8 +227,7 @@ fn export(store: &DocStore, dir: Option<PathBuf>) -> Result<()> {
             std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
             dir
         },
-        // Kept, not cleaned up on drop: the whole point is to hand the path to
-        // the caller so they can edit the files in it.
+        // Kept, not cleaned up on drop, so the caller can edit the files in it.
         None => tempfile::Builder::new()
             .prefix("rd-export-")
             .tempdir()?
@@ -258,7 +257,7 @@ fn open_page(store: &DocStore, root: &Path, path: &str) -> Result<()> {
     open::repo(root)
 }
 
-/// Symlinks `~/.local/bin/rd` at this binary — the copy inside
+/// Symlinks `~/.local/bin/rd` at this binary, the copy inside
 /// `RepoDocs.app/Contents/MacOS` when `rd` ships with the app.
 fn install() -> Result<()> {
     let target = std::env::current_exe()

@@ -16,11 +16,11 @@ pub struct Output {
 
 /// A thin wrapper over `git` plumbing for a single repository.
 ///
-/// Nothing here may touch the user's working tree, index, or HEAD — the app
-/// runs against repos people are actively working in, so a stray checkout or
-/// index write would be worse than the feature is worth. Writes route through a
-/// temporary index via `GIT_INDEX_FILE`; merges go through `merge-tree`, which
-/// needs no index at all.
+/// Nothing here may touch the user's working tree, index, or HEAD: the app
+/// runs against repos people are actively working in, where a stray checkout
+/// or index write would lose their work. Writes route through a temporary
+/// index via `GIT_INDEX_FILE`; merges go through `merge-tree`, which needs no
+/// index at all.
 #[derive(Debug, Clone)]
 pub struct Git {
     pub root: PathBuf,
@@ -53,7 +53,7 @@ impl Git {
     /// Runs git and returns the exit status alongside its output, without
     /// erroring.
     ///
-    /// Needed for commands where a nonzero exit is a *result*, not an error —
+    /// Needed for commands where a nonzero exit is a *result*, not an error.
     /// `merge-tree` exits 1 on a conflict but still prints the tree and the
     /// conflicted stages we need.
     pub fn capture(
@@ -65,7 +65,7 @@ impl Git {
         let mut command = Command::new(GIT);
         command
             // Path-listing commands (`ls-tree`, `log --name-only`) otherwise
-            // C-quote any path with a non-ASCII byte — `notes/café.md` comes
+            // C-quote any path with a non-ASCII byte: `notes/café.md` comes
             // back as `"notes/caf\303\251.md"`, which no later `cat-file` can
             // resolve. Off globally so no call site can forget it.
             .args(["-c", "core.quotePath=false"])
@@ -82,7 +82,7 @@ impl Git {
             .map_err(|error| StoreError::Spawn(error.to_string()))?;
 
         // Feed stdin off-thread: a blob larger than the pipe buffer would
-        // otherwise wedge us, since nobody is draining stdout while we write.
+        // otherwise deadlock, since nobody is draining stdout while we write.
         let writer = child.stdin.take().map(|mut pipe| {
             let payload = stdin.unwrap_or_default().to_vec();
             std::thread::spawn(move || {
@@ -167,7 +167,7 @@ impl TempIndex {
         let file = tempfile::Builder::new()
             .prefix("repo-docs-index-")
             .tempfile()?;
-        // Keep the unique name, drop the file itself — git wants to create it.
+        // Keep the unique name, drop the file itself: git wants to create it.
         let (_, path) = file
             .keep()
             .map_err(|error| StoreError::Io(error.to_string()))?;

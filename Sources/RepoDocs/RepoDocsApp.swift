@@ -24,7 +24,7 @@ struct RepoDocsApp: App {
     // No native title bar: the window's only chrome is `ContentView`'s own
     // floating bar, which can scroll away with the document. A native toolbar
     // spans the sidebar as well as the detail column and can't hide over just
-    // one of them, so the two can't be reconciled — this app picks the one
+    // one of them, so the two can't be reconciled; this app picks the one
     // that hides.
     .windowStyle(.hiddenTitleBar)
     .commands {
@@ -89,7 +89,7 @@ struct RootView: View {
       // rather than on the `WindowGroup` itself; it fires regardless of
       // which window happens to be current, and just asks SwiftUI to
       // open (or focus, since windows are keyed `for: URL.self`) the
-      // requested repo's window — see `CLI.openRepo`.
+      // requested repo's window; see `CLI.openRepo`.
       .onOpenURL { url in
         guard let path = Self.repoPath(from: url) else { return }
         openWindow(value: URL(fileURLWithPath: path))

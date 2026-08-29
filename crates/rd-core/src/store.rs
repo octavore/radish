@@ -25,16 +25,17 @@ fn remote_or_default(remote: Option<String>) -> String {
 
 /// Git-backed storage for markdown, held outside the working tree.
 ///
-/// Two stores, one engine (see `docs/STORAGE.md` §2, via `rd`):
+/// Two stores over one engine (see `docs/STORAGE.md` §2, via `rd`):
 ///   - Pages: free-standing docs in `refs/docs/pages`, keyed by human path.
 ///   - Annotations: true git notes in `refs/notes/annotations`, keyed by
 ///     commit.
 ///
 /// Pages deliberately do *not* use the notes porcelain. Keying a page by a
 /// synthetic anchor object leaves that anchor unreachable, so `git gc` collects
-/// it and `git notes prune` then deletes the page hanging off it — two routine
-/// commands that silently destroy the store. A plain tree under `refs/docs/`
-/// keeps every blob reachable and puts the store outside prune's blast radius.
+/// it and `git notes prune` then deletes the page hanging off it. Both are
+/// routine commands that would silently destroy the store. A plain tree under
+/// `refs/docs/`
+/// keeps every blob reachable, so neither command can reach the store.
 #[derive(Debug, uniffi::Object)]
 pub struct DocStore {
     git: Git,
@@ -54,8 +55,8 @@ impl DocStore {
 
 #[uniffi::export]
 impl DocStore {
-    /// Errors when `root` isn't a git repository, so a bad path fails at the
-    /// door rather than on the first read.
+    /// Errors when `root` isn't a git repository, so a bad path fails here
+    /// rather than on the first read.
     #[uniffi::constructor]
     pub fn new(root: String) -> Result<Self> {
         let root = PathBuf::from(root);
@@ -197,7 +198,7 @@ impl DocStore {
     }
 
     /// Last-modified time for every page, in one `git log` pass rather than one
-    /// per path — `history` walks the whole `PAGES_REF` history per call, which
+    /// per path. `history` walks the whole `PAGES_REF` history per call, which
     /// is fine for a single page but O(pages × commits) across all of them. Log
     /// is newest-first, so the first commit touching a path is its most recent
     /// modification.
@@ -256,8 +257,8 @@ impl DocStore {
 
     // MARK: - Sync
 
-    /// Configures the fetch refspecs. Notes and custom refs are not synced by
-    /// default — the classic way a doc store silently diverges.
+    /// Configures the fetch refspecs. Git does not sync notes or custom refs by
+    /// default, so without this the doc store diverges silently.
     pub fn configure_remote(&self, remote: Option<String>) -> Result<()> {
         let remote = remote_or_default(remote);
         let specs = [
@@ -291,8 +292,7 @@ impl DocStore {
     /// `merge-tree --write-tree` does a full three-way merge in memory: no
     /// working tree, no index, no HEAD movement. On conflict it exits 1 and
     /// still prints the tree plus the conflicted stages, which is what lets us
-    /// show a real base/ours/theirs view instead of a wall of `<<<<<<<`
-    /// markers.
+    /// show a real base/ours/theirs view instead of `<<<<<<<` conflict markers.
     pub fn merge_from_upstream(&self, remote: Option<String>) -> Result<MergeResult> {
         let upstream = pages_upstream(&remote_or_default(remote));
         let Some(theirs) = self.git.resolve(&upstream) else {
@@ -348,7 +348,7 @@ impl DocStore {
         // makes the guard work regardless.
         let lease = match self.git.resolve(&pages_upstream(&remote)) {
             Some(mirror) => format!("--force-with-lease={PAGES_REF}:{mirror}"),
-            // Nothing fetched yet, so the lease is "the ref must not exist" —
+            // Nothing fetched yet, so the lease is "the ref must not exist":
             // a remote that already has pages rejects the push, which is the
             // safe direction: fetch first.
             None => format!("--force-with-lease={PAGES_REF}:"),

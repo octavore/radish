@@ -4,7 +4,7 @@ import SwiftUI
 /// RepoDocs ▸ Settings (⌘,). A `TabView` shell, per the macOS app checklist:
 /// one `Label` per tab, a fixed frame, top-aligned content. Every value is
 /// persisted via `@AppStorage` under keys `ContentView` reads directly, so a
-/// change here restyles every open window's editor live — there's no separate
+/// change here restyles every open window's editor live; there is no separate
 /// "apply" step beyond the theme field, which stages its paste until parsed.
 struct SettingsView: View {
   var body: some View {
@@ -30,7 +30,7 @@ private struct ThemeSettingsView: View {
     Form {
       Section("Theme") {
         Text(
-          "Paste 6 comma-separated hex colors — text, heading, code, bold, italic, background — Slack-style."
+          "Paste 6 comma-separated hex colors, Slack-style: text, heading, code, bold, italic, background."
         )
         .font(.caption)
         .foregroundStyle(.secondary)

@@ -55,7 +55,7 @@ struct InspectorView: View {
       } else {
         ContentUnavailableView(
           "No page selected", systemImage: "info.circle",
-          description: Text("Folders are path prefixes, not stored objects — they have no OID."))
+          description: Text("Folders are path prefixes, not stored objects, so they have no OID."))
       }
     }
     .textSelection(.enabled)
@@ -74,7 +74,7 @@ struct InspectorView: View {
   /// so it can be copied out to a terminal.
   private func oid(_ label: String, _ value: String) -> some View {
     LabeledContent(label) {
-      Text(value.isEmpty ? "—" : String(value.prefix(10)))
+      Text(value.isEmpty ? "–" : String(value.prefix(10)))
         .font(.system(.body, design: .monospaced))
         .foregroundStyle(.secondary)
         .help(value)

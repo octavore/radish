@@ -2,7 +2,7 @@ import RepoDocsCore
 import SwiftUI
 
 /// Renders a unified diff (as produced by `git diff --no-color`) with
-/// per-line coloring. No syntax highlighting — this is git's own diff
+/// per-line coloring. No syntax highlighting; this is git's own diff
 /// format, not markdown.
 struct DiffView: View {
   let diff: PageDiff
@@ -37,7 +37,7 @@ struct DiffView: View {
     VStack(alignment: .leading, spacing: 4) {
       Text(diff.path)
         .font(.headline)
-      Text("Since \(diff.revision.date.formatted(date: .abbreviated, time: .shortened)) — \(diff.revision.subject)")
+      Text("Since \(diff.revision.date.formatted(date: .abbreviated, time: .shortened)): \(diff.revision.subject)")
         .font(.caption)
         .foregroundStyle(.secondary)
     }

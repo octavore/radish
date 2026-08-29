@@ -10,7 +10,7 @@ final class AppModel {
   private(set) var pages: [Page] = []
   private(set) var tree: [DocNode] = []
   /// Folders created via the sidebar's "New Folder" but not yet holding a
-  /// page — see `createFolder`. Client-side only; lost on refresh/reopen.
+  /// page; see `createFolder`. Client-side only; lost on refresh/reopen.
   private(set) var pendingFolders: Set<String> = []
   private(set) var status: String = ""
   /// Git identity of the selected page, shown in the inspector. Nil for a
@@ -24,9 +24,9 @@ final class AppModel {
   var diff: PageDiff?
 
   /// The editor's document: raw markdown source, verbatim. The editor
-  /// highlights this string itself, so it must round-trip exactly — a
-  /// load→save cycle must never rewrite it, or git history fills with
-  /// phantom diffs.
+  /// highlights this string itself, so it must round-trip exactly. A
+  /// load/save cycle must never rewrite it, or git history accumulates
+  /// diffs that change nothing.
   var text = ""
   private(set) var isDirty = false
 
@@ -148,13 +148,11 @@ final class AppModel {
     }
   }
 
-  /// Adds a folder to the sidebar without writing anything to git — the
-  /// store has no folder objects (see `tree.rs`), so an empty folder can't
-  /// actually be persisted. This just seeds `pendingFolders`, which
-  /// `buildTree` folds into the tree; the folder becomes "real" the
-  /// moment a page is created inside it, and simply vanishes (never having
-  /// existed as far as git is concerned) if the repo is refreshed or
-  /// reopened before that happens.
+  /// Adds a folder to the sidebar without writing anything to git. The
+  /// store has no folder objects (see `tree.rs`), so an empty folder cannot
+  /// be persisted. This seeds `pendingFolders`, which `buildTree` folds into
+  /// the tree; the folder becomes real when a page is created inside it, and
+  /// disappears if the repo is refreshed or reopened before that happens.
   func createFolder(path rawPath: String) {
     let trimmed = rawPath
       .trimmingCharacters(in: .whitespaces)
@@ -169,7 +167,7 @@ final class AppModel {
   /// recursively for `.md` files; a file's page path is its path relative to
   /// the repo root, so an import round-trips back to the same tree shape.
   /// Reading is plain `FileManager`/`String(contentsOf:)` off the working
-  /// tree — the store write goes through the usual §1 plumbing, so this never
+  /// tree; the store write goes through the usual §1 plumbing, so this never
   /// touches the index or `HEAD`.
   func importPaths(_ urls: [URL]) async {
     guard let store, let repoRoot = repo else { return }

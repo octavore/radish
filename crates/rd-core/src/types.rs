@@ -38,8 +38,8 @@ pub struct Revision {
 }
 
 /// Where a page physically lives in the object database. Surfaced in the
-/// inspector so the storage model is legible rather than magic — these are the
-/// exact OIDs you can `git cat-file` from a terminal.
+/// inspector so the storage model is legible: these are the exact OIDs you can
+/// `git cat-file` from a terminal.
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct PageInfo {
     pub path: String,

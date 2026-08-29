@@ -4,8 +4,8 @@ use crate::types::Page;
 
 /// One row in the sidebar: either a folder (with children) or a page (a leaf).
 ///
-/// The page store has no folder objects — a "folder" is just a shared path
-/// prefix among page paths, exactly as in a git tree. So the tree is derived
+/// The page store has no folder objects; a "folder" is just a shared path
+/// prefix among page paths, exactly as in a git tree. The tree is derived
 /// from the flat page list rather than stored, and an empty folder cannot exist
 /// by construction.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, uniffi::Record)]
@@ -25,7 +25,7 @@ impl DocNode {
 /// Groups pages into a folder hierarchy by splitting their paths.
 ///
 /// `pending_folders` are client-side-only placeholders (see
-/// `AppModel.createFolder`) — folder paths, each with a trailing `/`, that
+/// `AppModel.createFolder`): folder paths, each with a trailing `/`, that
 /// don't correspond to any page yet. They're folded in alongside the real ones
 /// so a just-created empty folder shows up in the sidebar before it has any
 /// content.
@@ -72,7 +72,7 @@ fn build(pages: &[Page], pending_folders: &[String], prefix: &str) -> Vec<DocNod
         });
     }
 
-    // Folders first, then loose pages — the usual file-browser convention.
+    // Folders first, then loose pages, the usual file-browser convention.
     folder_order.sort();
     let mut nodes: Vec<DocNode> = folder_order
         .iter()

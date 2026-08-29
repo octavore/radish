@@ -274,7 +274,7 @@ fn overlapping_edits_report_conflict_with_three_stages() {
     assert!(conflict.ours.is_some());
     assert!(conflict.theirs.is_some());
 
-    // The stage blobs must be real, readable content — that is what lets the UI
+    // The stage blobs must be real, readable content, which is what lets the UI
     // show base/ours/theirs rather than conflict markers.
     let their_side = f
         .git
@@ -377,7 +377,7 @@ fn last_modified_times_reports_the_newest_commit_per_page() {
 }
 
 /// `ls-tree` and `log --name-only` C-quote non-ASCII paths by default, which
-/// would hand back `"notes/caf\303\251.md"` — a path no later `cat-file` can
+/// would hand back `"notes/caf\303\251.md"`, a path no later `cat-file` can
 /// resolve, and a key `last_modified_times` could never match.
 #[test]
 fn non_ascii_page_paths_round_trip() {

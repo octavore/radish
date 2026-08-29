@@ -10,9 +10,9 @@ use anyhow::{anyhow, Context, Result};
 ///
 /// A plain `open <bundle>` on an already-running app just re-activates it
 /// without telling it anything changed, since the app's model is built once per
-/// process. The URL is what actually opens the repo. The app persists it as the
-/// last-opened repo on its own, so quitting and reopening from Finder resumes
-/// there — the CLI writes no preferences.
+/// process. The URL is what opens the repo. The app persists it as the
+/// last-opened repo itself, so quitting and reopening from Finder resumes
+/// there; the CLI writes no preferences.
 pub fn repo(root: &Path) -> Result<()> {
     let app = bundle().ok_or_else(|| anyhow!("can't find RepoDocs.app to launch"))?;
     let url = format!(
@@ -45,8 +45,8 @@ fn bundle() -> Option<PathBuf> {
 }
 
 /// Percent-encodes a path for a URL query value. Paths are the only thing that
-/// goes through here, so the unreserved set plus `/` covers everything and a
-/// URL crate would be a dependency for one function.
+/// goes through here, so the unreserved set plus `/` covers everything without
+/// pulling in a URL crate for one function.
 fn percent_encode(value: &str) -> String {
     let mut encoded = String::with_capacity(value.len());
     for byte in value.bytes() {
