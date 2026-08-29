@@ -24,6 +24,9 @@ enum CLIInstaller {
       .appending(path: ".local/bin/rd")
   }
 
+  /// Where the symlink lives, for display in Settings.
+  static var linkPath: String { linkURL.path }
+
   /// The bundled CLI, a sibling of this app's own executable.
   private static var toolURL: URL? {
     guard let executable = Bundle.main.executableURL else { return nil }
@@ -57,5 +60,12 @@ enum CLIInstaller {
     }
     try FileManager.default.createSymbolicLink(
       atPath: linkURL.path, withDestinationPath: target.path)
+  }
+
+  /// Removes the symlink if it points at our bundled tool. Leaves anything
+  /// else at that path alone.
+  static func uninstall() throws {
+    guard isInstalled else { return }
+    try FileManager.default.removeItem(at: linkURL)
   }
 }

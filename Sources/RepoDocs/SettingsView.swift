@@ -9,14 +9,71 @@ import SwiftUI
 struct SettingsView: View {
   var body: some View {
     TabView {
+      GeneralSettingsView()
+        .tabItem { Label("General", systemImage: "gearshape") }
       ThemeSettingsView()
         .tabItem { Label("Theme", systemImage: "paintpalette") }
       TypographySettingsView()
         .tabItem { Label("Typography", systemImage: "textformat.size") }
     }
     .padding(20)
-    .frame(width: 460, height: 260, alignment: .top)
+    .frame(width: 460, height: 300, alignment: .top)
     .navigationTitle("RepoDocs Settings")
+  }
+}
+
+/// General app settings. Currently just the `rd` command line helper: a
+/// symlink at `~/.local/bin/rd` pointing at the binary bundled in this app,
+/// the same thing the "Install 'rd' Command Line Tool" menu item creates.
+private struct GeneralSettingsView: View {
+  @State private var installed = CLIInstaller.isInstalled
+  @State private var errorMessage: String?
+
+  var body: some View {
+    Form {
+      Section("Command Line Tool") {
+        Text(
+          "Symlink `rd` into `\(CLIInstaller.linkPath)` so it's on your `PATH`. "
+            + "Make sure `~/.local/bin` is in your shell's `PATH`."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        HStack {
+          Toggle("Install `rd` helper", isOn: toggleBinding)
+            .toggleStyle(.switch)
+          Spacer()
+          if installed {
+            Text("Installed").font(.caption).foregroundStyle(.secondary)
+          }
+        }
+        if let errorMessage {
+          Text(errorMessage)
+            .font(.caption)
+            .foregroundStyle(.red)
+        }
+      }
+    }
+    .formStyle(.grouped)
+    .onAppear { installed = CLIInstaller.isInstalled }
+  }
+
+  private var toggleBinding: Binding<Bool> {
+    Binding(
+      get: { installed },
+      set: { want in
+        errorMessage = nil
+        do {
+          if want {
+            try CLIInstaller.install()
+          } else {
+            try CLIInstaller.uninstall()
+          }
+          installed = CLIInstaller.isInstalled
+        } catch {
+          errorMessage = error.localizedDescription
+          installed = CLIInstaller.isInstalled
+        }
+      })
   }
 }
 
