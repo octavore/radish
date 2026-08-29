@@ -5,7 +5,7 @@ version      = "0.1.0"
 build_number = "1"
 
 [build]
-info_json_path = "info.json"  # registers the repodocs:// URL scheme, see CLI.openRepo
+info_json_path = "info.json"  # registers the repodocs:// URL scheme, see open.rs
 
 [build.icon]
 src        = "treasure-chest.png"

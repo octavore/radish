@@ -74,8 +74,11 @@ final class AppModel {
   }
 
   func open(_ url: URL) {
-    guard let opened = try? DocStore(root: url.path) else {
-      errorMessage = "\(url.lastPathComponent) is not a git repository."
+    let opened: DocStore
+    do {
+      opened = try DocStore(root: url.path)
+    } catch {
+      errorMessage = errorText(error)
       return
     }
 

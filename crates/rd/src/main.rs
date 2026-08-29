@@ -147,8 +147,10 @@ fn list(store: &DocStore, by_date: bool) -> Result<()> {
 
 fn cat(store: &DocStore, path: &str) -> Result<()> {
     let content = store.read(path.to_string())?;
+    // `print!`, not `println!`: pages end in their own newline, and the tty
+    // branch shouldn't add a blank line the piped branch doesn't.
     if std::io::stdout().is_terminal() {
-        println!("{}", markdown::colorize(&content));
+        print!("{}", markdown::colorize(&content));
     } else {
         print!("{content}");
     }

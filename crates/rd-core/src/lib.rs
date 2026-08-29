@@ -14,7 +14,7 @@ pub mod types;
 
 pub use error::{Result, StoreError};
 pub use git::Git;
-pub use store::{DocStore, NOTES_REF, PAGES_REF, PAGES_UPSTREAM};
+pub use store::{pages_upstream, DocStore, DEFAULT_REMOTE, NOTES_REF, PAGES_REF};
 pub use tree::{build_tree, DocNode};
 pub use types::{Conflict, MergeResult, Page, PageDiff, PageInfo, Revision};
 

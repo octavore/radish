@@ -64,6 +64,11 @@ impl Git {
     ) -> Result<Output> {
         let mut command = Command::new(GIT);
         command
+            // Path-listing commands (`ls-tree`, `log --name-only`) otherwise
+            // C-quote any path with a non-ASCII byte — `notes/café.md` comes
+            // back as `"notes/caf\303\251.md"`, which no later `cat-file` can
+            // resolve. Off globally so no call site can forget it.
+            .args(["-c", "core.quotePath=false"])
             .arg("-C")
             .arg(&self.root)
             .args(args)

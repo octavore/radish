@@ -1,6 +1,6 @@
 //! Ported from `Tests/RepoDocsTests/DocStoreTests.swift`.
 
-use rd_core::store::{PAGES_REF, PAGES_UPSTREAM};
+use rd_core::store::{pages_upstream, PAGES_REF};
 use rd_core::{DocStore, Git, MergeResult};
 use tempfile::TempDir;
 
@@ -24,6 +24,10 @@ fn fixture() -> Fixture {
     git.run(&["config", "user.email", "test@example.com"])
         .unwrap();
     git.run(&["config", "user.name", "Test"]).unwrap();
+    // Pin git's own default rather than inheriting the developer's ~/.gitconfig:
+    // someone with `core.quotePath = false` set globally would otherwise never
+    // see the path-quoting these tests exist to catch.
+    git.run(&["config", "core.quotePath", "true"]).unwrap();
     git.run(&["commit", "--quiet", "--allow-empty", "-m", "root"])
         .unwrap();
 
@@ -219,12 +223,12 @@ fn diverged_edits_merge_cleanly() {
         "line one\nline two\nline three\nREMOTE\n",
     );
     f.git
-        .run(&["update-ref", PAGES_UPSTREAM, &theirs, ""])
+        .run(&["update-ref", &pages_upstream("origin"), &theirs, ""])
         .unwrap();
     f.git.run(&["update-ref", PAGES_REF, &ours, &ours]).unwrap();
 
     assert!(matches!(
-        f.store.merge_from_upstream().unwrap(),
+        f.store.merge_from_upstream(None).unwrap(),
         MergeResult::Merged
     ));
 
@@ -251,10 +255,10 @@ fn overlapping_edits_report_conflict_with_three_stages() {
 
     let theirs = commit_onto(&f.git, &base, "doc.md", "line one\nTHEIRS\nline three\n");
     f.git
-        .run(&["update-ref", PAGES_UPSTREAM, &theirs, ""])
+        .run(&["update-ref", &pages_upstream("origin"), &theirs, ""])
         .unwrap();
 
-    let MergeResult::Conflicted { conflicts } = f.store.merge_from_upstream().unwrap() else {
+    let MergeResult::Conflicted { conflicts } = f.store.merge_from_upstream(None).unwrap() else {
         panic!("expected a conflict");
     };
 
@@ -370,6 +374,117 @@ fn last_modified_times_reports_the_newest_commit_per_page() {
     let times = f.store.last_modified_times().unwrap();
     assert_eq!(times.len(), 2);
     assert!(times[&"a.md".to_string()] >= times[&"b.md".to_string()]);
+}
+
+/// `ls-tree` and `log --name-only` C-quote non-ASCII paths by default, which
+/// would hand back `"notes/caf\303\251.md"` — a path no later `cat-file` can
+/// resolve, and a key `last_modified_times` could never match.
+#[test]
+fn non_ascii_page_paths_round_trip() {
+    let f = fixture();
+    let path = "notes/café/naïve.md";
+    f.store
+        .write(path.into(), "# Café\n".into(), None)
+        .unwrap();
+
+    assert_eq!(paths(&f.store), [path]);
+    assert_eq!(f.store.read(path.into()).unwrap(), "# Café\n");
+    assert_eq!(f.store.info(path.into()).unwrap().path, path);
+    assert!(f.store.last_modified_times().unwrap().contains_key(path));
+
+    f.store.delete(path.into()).unwrap();
+    assert!(paths(&f.store).is_empty());
+}
+
+/// The same trap for a path git would quote for a different reason: a space is
+/// safe, a quote and a backslash are not.
+#[test]
+fn awkward_page_paths_round_trip() {
+    let f = fixture();
+    let path = "my notes/a \"quoted\" \\ page.md";
+    f.store.write(path.into(), "body\n".into(), None).unwrap();
+
+    assert_eq!(paths(&f.store), [path]);
+    assert_eq!(f.store.read(path.into()).unwrap(), "body\n");
+}
+
+#[test]
+fn configure_remote_scopes_the_mirror_ref_per_remote() {
+    let f = fixture();
+    f.store.configure_remote(None).unwrap();
+    f.store.configure_remote(Some("upstream".into())).unwrap();
+
+    let specs = |remote: &str| {
+        f.git
+            .text(&["config", "--get-all", &format!("remote.{remote}.fetch")])
+            .unwrap()
+    };
+    assert!(specs("origin").contains("+refs/docs/pages:refs/docs/remotes/origin/pages"));
+    // The second remote must not fetch into the first's mirror.
+    assert!(specs("upstream").contains("+refs/docs/pages:refs/docs/remotes/upstream/pages"));
+    assert!(!specs("upstream").contains("remotes/origin/pages"));
+}
+
+#[test]
+fn configure_remote_does_not_duplicate_existing_refspecs() {
+    let f = fixture();
+    // A spec that merely *contains* ours as a substring must not be mistaken
+    // for it.
+    f.git
+        .run(&[
+            "config",
+            "--add",
+            "remote.origin.fetch",
+            "+refs/docs/pages:refs/docs/remotes/origin/pages-old",
+        ])
+        .unwrap();
+
+    f.store.configure_remote(None).unwrap();
+    f.store.configure_remote(None).unwrap();
+
+    let specs = f
+        .git
+        .text(&["config", "--get-all", "remote.origin.fetch"])
+        .unwrap();
+    let ours = format!("+{PAGES_REF}:{}", pages_upstream("origin"));
+    assert_eq!(
+        specs.lines().filter(|line| *line == ours).count(),
+        1,
+        "added once, not on every call"
+    );
+}
+
+/// A second remote's pages must not be merged out of the first one's mirror.
+#[test]
+fn merge_reads_the_named_remotes_mirror() {
+    let f = fixture();
+    f.store
+        .write("doc.md".into(), "base\n".into(), None)
+        .unwrap();
+    let base = f.git.resolve(PAGES_REF).unwrap();
+
+    let theirs = commit_onto(&f.git, &base, "doc.md", "base\nfrom upstream\n");
+    f.git
+        .run(&["update-ref", &pages_upstream("upstream"), &theirs, ""])
+        .unwrap();
+
+    // Nothing fetched from origin, so the default remote has nothing to merge.
+    assert!(matches!(
+        f.store.merge_from_upstream(None).unwrap(),
+        MergeResult::UpToDate
+    ));
+    assert_eq!(f.store.read("doc.md".into()).unwrap(), "base\n");
+
+    assert!(matches!(
+        f.store
+            .merge_from_upstream(Some("upstream".into()))
+            .unwrap(),
+        MergeResult::FastForwarded
+    ));
+    assert_eq!(
+        f.store.read("doc.md".into()).unwrap(),
+        "base\nfrom upstream\n"
+    );
 }
 
 #[test]

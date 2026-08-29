@@ -8,7 +8,20 @@ use crate::types::{Conflict, MergeResult, Page, PageInfo, Revision};
 
 pub const PAGES_REF: &str = "refs/docs/pages";
 pub const NOTES_REF: &str = "refs/notes/annotations";
-pub const PAGES_UPSTREAM: &str = "refs/docs/remotes/origin/pages";
+pub const DEFAULT_REMOTE: &str = "origin";
+
+/// Where `remote`'s page ref is mirrored locally after a fetch.
+///
+/// Scoped by remote name, exactly as the notes mirror is: two remotes fetching
+/// into one ref would leave `merge_from_upstream` merging from whichever
+/// happened to fetch last.
+pub fn pages_upstream(remote: &str) -> String {
+    format!("refs/docs/remotes/{remote}/pages")
+}
+
+fn remote_or_default(remote: Option<String>) -> String {
+    remote.unwrap_or_else(|| DEFAULT_REMOTE.to_string())
+}
 
 /// Git-backed storage for markdown, held outside the working tree.
 ///
@@ -58,12 +71,14 @@ impl DocStore {
         if self.git.resolve(PAGES_REF).is_none() {
             return Ok(Vec::new());
         }
+        // `-z`: NUL-separated and never quoted, so a path containing a quote,
+        // a backslash, or a newline survives verbatim.
         let listing = self
             .git
-            .text(&["ls-tree", "-r", "--name-only", PAGES_REF])?;
-        let mut pages: Vec<Page> = listing
-            .lines()
-            .filter(|line| !line.is_empty())
+            .run(&["ls-tree", "-r", "--name-only", "-z", PAGES_REF])?;
+        let mut pages: Vec<Page> = String::from_utf8_lossy(&listing)
+            .split('\0')
+            .filter(|entry| !entry.is_empty())
             .map(Page::new)
             .collect();
         pages.sort_by(|a, b| a.path.cmp(&b.path));
@@ -244,9 +259,9 @@ impl DocStore {
     /// Configures the fetch refspecs. Notes and custom refs are not synced by
     /// default — the classic way a doc store silently diverges.
     pub fn configure_remote(&self, remote: Option<String>) -> Result<()> {
-        let remote = remote.unwrap_or_else(|| "origin".to_string());
+        let remote = remote_or_default(remote);
         let specs = [
-            format!("+{PAGES_REF}:{PAGES_UPSTREAM}"),
+            format!("+{PAGES_REF}:{}", pages_upstream(&remote)),
             format!("+{NOTES_REF}:refs/notes/remotes/{remote}/annotations"),
         ];
         let key = format!("remote.{remote}.fetch");
@@ -254,8 +269,11 @@ impl DocStore {
             .git
             .text(&["config", "--get-all", &key])
             .unwrap_or_default();
+        // One whole line per configured refspec: a substring test would treat
+        // an unrelated `…/pages-old` spec as this one already being present.
+        let existing: Vec<&str> = existing.lines().map(str::trim).collect();
         for spec in &specs {
-            if !existing.contains(spec.as_str()) {
+            if !existing.contains(&spec.as_str()) {
                 self.git.run(&["config", "--add", &key, spec])?;
             }
         }
@@ -263,7 +281,7 @@ impl DocStore {
     }
 
     pub fn fetch(&self, remote: Option<String>) -> Result<()> {
-        let remote = remote.unwrap_or_else(|| "origin".to_string());
+        let remote = remote_or_default(remote);
         self.git.run(&["fetch", &remote])?;
         Ok(())
     }
@@ -275,8 +293,9 @@ impl DocStore {
     /// still prints the tree plus the conflicted stages, which is what lets us
     /// show a real base/ours/theirs view instead of a wall of `<<<<<<<`
     /// markers.
-    pub fn merge_from_upstream(&self) -> Result<MergeResult> {
-        let Some(theirs) = self.git.resolve(PAGES_UPSTREAM) else {
+    pub fn merge_from_upstream(&self, remote: Option<String>) -> Result<MergeResult> {
+        let upstream = pages_upstream(&remote_or_default(remote));
+        let Some(theirs) = self.git.resolve(&upstream) else {
             return Ok(MergeResult::UpToDate);
         };
         let Some(ours) = self.git.resolve(PAGES_REF) else {
@@ -317,13 +336,26 @@ impl DocStore {
     }
 
     pub fn push(&self, remote: Option<String>) -> Result<()> {
-        let remote = remote.unwrap_or_else(|| "origin".to_string());
+        let remote = remote_or_default(remote);
         // --force-with-lease is the network-level analogue of the update-ref
         // guard: it refuses to overwrite a remote that moved since our last
         // fetch. Never a bare --force.
+        //
+        // The expected value is spelled out rather than left implicit: without
+        // it git derives the lease from the remote-tracking ref it finds via
+        // the configured fetch refspec, which only exists once
+        // `configure_remote` has run. Naming our last-fetched mirror directly
+        // makes the guard work regardless.
+        let lease = match self.git.resolve(&pages_upstream(&remote)) {
+            Some(mirror) => format!("--force-with-lease={PAGES_REF}:{mirror}"),
+            // Nothing fetched yet, so the lease is "the ref must not exist" —
+            // a remote that already has pages rejects the push, which is the
+            // safe direction: fetch first.
+            None => format!("--force-with-lease={PAGES_REF}:"),
+        };
         self.git.run(&[
             "push",
-            &format!("--force-with-lease={PAGES_REF}"),
+            &lease,
             &remote,
             &format!("{PAGES_REF}:{PAGES_REF}"),
         ])?;
