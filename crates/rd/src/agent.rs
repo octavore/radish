@@ -41,6 +41,11 @@ pub const HELP: &str = indoc! {"
     Deleting:
       rd rm <path>
 
+    Formatting:
+      rd fmt <path>         reformat one doc with rumdl and write it back
+      rd fmt                reformat every doc
+      rd fmt --check        list docs that need formatting, exit non-zero
+
     `rd edit` both creates and updates; there is no separate 'new' command.
     Writes are compare-and-swap against the doc ref, so a concurrent writer
     is rejected rather than silently clobbered; on failure, re-read and retry.

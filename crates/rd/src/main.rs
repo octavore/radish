@@ -48,6 +48,14 @@ enum Cmd {
     /// Delete a doc
     #[command(alias = "delete")]
     Rm { path: String },
+    /// Reformat a doc, or every doc, with rumdl
+    Fmt {
+        /// A doc to format; omit to format every doc
+        path: Option<String>,
+        /// Report which docs would change without writing them
+        #[arg(long)]
+        check: bool,
+    },
     /// Dump every doc to a directory (default: a fresh tmpdir)
     Export { dir: Option<PathBuf> },
     /// Open a doc, or '.' for the current repo, in the RepoDocs app
@@ -94,6 +102,7 @@ fn run() -> Result<()> {
         Some(Cmd::Cat { path }) => cat(&store, &path),
         Some(Cmd::Edit { path, file }) => edit(&store, &path, file.as_deref()),
         Some(Cmd::Rm { path }) => remove(&store, &path),
+        Some(Cmd::Fmt { path, check }) => format(&store, path.as_deref(), check),
         Some(Cmd::Export { dir }) => export(&store, dir),
         Some(Cmd::Open { path }) => open_page(&store, &root, &path),
         Some(Cmd::Shorthand(args)) => {
@@ -210,6 +219,51 @@ fn edit_interactively(store: &DocStore, path: &str) -> Result<String> {
 
     std::fs::read_to_string(&scratch)
         .with_context(|| format!("can't read back {}", scratch.display()))
+}
+
+/// Reformats one doc, or every doc when `path` is `None`, running each through
+/// rumdl. With `check` set it writes nothing and instead exits non-zero when
+/// any doc would change, for use in a pre-commit hook or CI.
+fn format(store: &DocStore, path: Option<&str>, check: bool) -> Result<()> {
+    let paths: Vec<String> = match path {
+        Some(path) => {
+            if !store.list_pages()?.iter().any(|page| page.path == path) {
+                bail!("no such page: {path}");
+            }
+            vec![path.to_string()]
+        },
+        // Only markdown docs; a stored `rumdl.toml` or the like is not markdown
+        // and rumdl would mangle it.
+        None => store
+            .list_pages()?
+            .into_iter()
+            .map(|page| page.path)
+            .filter(|path| path.ends_with(".md"))
+            .collect(),
+    };
+
+    let mut changed = 0;
+    for path in paths {
+        let original = store.read(path.clone())?;
+        let formatted = store.reformat(original.clone())?;
+        if formatted == original {
+            continue;
+        }
+        changed += 1;
+        if check {
+            println!("{}", cformat!("<yellow>would reformat</> {path}"));
+        } else {
+            store.write(path.clone(), formatted, None)?;
+            println!("{}", cformat!("<green>reformatted</> {path}"));
+        }
+    }
+
+    match (changed, check) {
+        (0, _) => println!("already formatted"),
+        (n, true) => bail!("{n} doc(s) need formatting"),
+        _ => {},
+    }
+    Ok(())
 }
 
 fn remove(store: &DocStore, path: &str) -> Result<()> {

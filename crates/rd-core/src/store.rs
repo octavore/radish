@@ -10,6 +10,9 @@ pub const PAGES_REF: &str = "refs/docs/pages";
 pub const NOTES_REF: &str = "refs/notes/annotations";
 pub const DEFAULT_REMOTE: &str = "origin";
 
+/// Doc paths that may hold a rumdl config, in rumdl's own filename precedence.
+const RUMDL_CONFIG_DOCS: [&str; 2] = [".rumdl.toml", "rumdl.toml"];
+
 /// Where `remote`'s page ref is mirrored locally after a fetch.
 ///
 /// Scoped by remote name, exactly as the notes mirror is: two remotes fetching
@@ -91,6 +94,26 @@ impl DocStore {
             .git
             .run(&["cat-file", "-p", &format!("{PAGES_REF}:{path}")])?;
         String::from_utf8(bytes).map_err(|_| StoreError::NotUtf8(path))
+    }
+
+    /// Reformats `content` with rumdl and returns the result, without writing
+    /// anything. The config is resolved the way rumdl resolves it, with one
+    /// added tier: a `rumdl.toml` (or `.rumdl.toml`) stored as a doc wins over
+    /// a config in the repo working tree, which wins over the user-level
+    /// config. rumdl picks a single source rather than merging them. When
+    /// rumdl reports an internal error the text comes back unchanged.
+    pub fn reformat(&self, content: String) -> Result<String> {
+        let pages = self.list_pages()?;
+        let config_doc = RUMDL_CONFIG_DOCS
+            .iter()
+            .find(|name| pages.iter().any(|page| page.path == **name))
+            .map(|name| self.read(name.to_string()))
+            .transpose()?;
+        Ok(crate::fmt::reformat(
+            &content,
+            config_doc.as_deref(),
+            self.root(),
+        ))
     }
 
     /// Writes a page and advances the ref by compare-and-swap.
@@ -353,12 +376,8 @@ impl DocStore {
             // safe direction: fetch first.
             None => format!("--force-with-lease={PAGES_REF}:"),
         };
-        self.git.run(&[
-            "push",
-            &lease,
-            &remote,
-            &format!("{PAGES_REF}:{PAGES_REF}"),
-        ])?;
+        self.git
+            .run(&["push", &lease, &remote, &format!("{PAGES_REF}:{PAGES_REF}")])?;
         Ok(())
     }
 }

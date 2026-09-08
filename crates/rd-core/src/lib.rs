@@ -7,6 +7,7 @@
 //! stay in sync.
 
 pub mod error;
+pub mod fmt;
 pub mod git;
 pub mod store;
 pub mod tree;
