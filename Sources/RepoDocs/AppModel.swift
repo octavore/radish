@@ -40,11 +40,18 @@ final class AppModel {
   private var store: DocStore?
   private static let repoKey = "repoURL"
 
-  init() {
-    if let saved = UserDefaults.standard.string(forKey: Self.repoKey) {
-      let url = URL(fileURLWithPath: saved)
-      if isRepository(path: url.path) { open(url) }
-    }
+  /// Reopens the repository from the last session. Kept out of `init` on
+  /// purpose: `init` runs every time SwiftUI re-creates the owning view, and a
+  /// git call (or any observable mutation) there feeds back into the view graph
+  /// and spins. A view calls this once from `.task`.
+  func restoreLastRepo() async {
+    guard repo == nil, store == nil,
+      let saved = UserDefaults.standard.string(forKey: Self.repoKey)
+    else { return }
+    let url = URL(fileURLWithPath: saved)
+    let isRepo = (try? await run { isRepository(path: url.path) }) ?? false
+    guard isRepo else { return }
+    await open(url)
   }
 
   /// Binding handed to the editor. Edits mark the document dirty; loads from
@@ -70,13 +77,16 @@ final class AppModel {
     panel.message = "Choose a git repository."
     panel.directoryURL = repo
     guard panel.runModal() == .OK, let url = panel.url else { return }
-    open(url)
+    Task { await open(url) }
   }
 
-  func open(_ url: URL) {
+  /// Opens `url` as the window's repository. The `DocStore` construction shells
+  /// out to git, so it runs off the main actor; everything after it is main-actor
+  /// state assignment.
+  func open(_ url: URL) async {
     let opened: DocStore
     do {
-      opened = try DocStore(root: url.path)
+      opened = try await run { try DocStore(root: url.path) }
     } catch {
       errorMessage = errorText(error)
       return
@@ -95,7 +105,7 @@ final class AppModel {
     repo = url
     store = opened
     UserDefaults.standard.set(url.path, forKey: Self.repoKey)
-    Task { await refresh() }
+    await refresh()
   }
 
   func refresh() async {

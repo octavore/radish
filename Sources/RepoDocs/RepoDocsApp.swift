@@ -82,8 +82,12 @@ struct RootView: View {
   var body: some View {
     ContentView(model: model)
       .focusedSceneValue(\.appModel, model)
-      .onAppear {
-        if let repoURL { model.open(repoURL) }
+      .task(id: repoURL) {
+        if let repoURL {
+          await model.open(repoURL)
+        } else {
+          await model.restoreLastRepo()
+        }
       }
       // `onOpenURL` is a `View` modifier, not a `Scene` one, so it's here
       // rather than on the `WindowGroup` itself; it fires regardless of
