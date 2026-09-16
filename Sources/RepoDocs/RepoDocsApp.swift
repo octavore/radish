@@ -1,5 +1,5 @@
 import AppKit
-import CharmingEditor
+import Crumpet
 import SwiftUI
 
 /// The repositories currently open in a window, keyed by canonical top-level

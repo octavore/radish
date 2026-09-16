@@ -1,6 +1,15 @@
 {
-  "originHash" : "ffa18e7f6073edfb15ffd3567e54ca8041f62026a46079171903cea29946f74c",
+  "originHash" : "47197d4af608ebaaca0a74225ad06886577ddaa3b2b1e20b72a7c3d58f0dcbd7",
   "pins" : [
+    {
+      "identity" : "crumpet",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/octavore/crumpet",
+      "state" : {
+        "revision" : "effd54aac3fbbcf29e3aaadf0060f73192814db7",
+        "version" : "0.1.0"
+      }
+    },
     {
       "identity" : "swift-tree-sitter",
       "kind" : "remoteSourceControl",

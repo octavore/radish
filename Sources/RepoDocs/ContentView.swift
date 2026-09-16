@@ -1,5 +1,5 @@
 import AppKit
-import CharmingEditor
+import Crumpet
 import RepoDocsCore
 import SwiftUI
 

@@ -1,5 +1,5 @@
 //! Colorizes markdown source for terminal display (`rd cat`), using the same
-//! tree-sitter grammar `CharmingEditor` uses to highlight the doc in the GUI.
+//! tree-sitter grammar `Crumpet` uses to highlight the doc in the GUI.
 //! A real parse rather than a regex approximation, so nesting, code fences, and
 //! links are handled correctly.
 //!

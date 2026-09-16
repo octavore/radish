@@ -1,5 +1,5 @@
 import AppKit
-import CharmingEditor
+import Crumpet
 import SwiftUI
 
 /// RepoDocs ▸ Settings (⌘,). A `TabView` shell, per the macOS app checklist:
@@ -166,7 +166,7 @@ private struct ThemeSettingsView: View {
   }
 }
 
-/// Editor typography. The rows come straight from CharmingEditor's drop-in
+/// Editor typography. The rows come straight from Crumpet's drop-in
 /// `EditorSettingsForm` (font, sizes, ratios, line height, max width, marker
 /// reveal, restore-defaults), bound to the one `EditorSettings` value
 /// `ContentView` reads to style the editor.
@@ -196,7 +196,7 @@ enum AppSettings {
   /// adaptive default".
   static let themeKey = "editorTheme"
 
-  /// `@AppStorage` key backing the CharmingEditor `EditorSettings` bundle.
+  /// `@AppStorage` key backing the Crumpet `EditorSettings` bundle.
   static let editorSettingsKey = "editorSettings"
 
   /// Carries a typography change straight to every open editor.

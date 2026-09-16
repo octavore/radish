@@ -11,10 +11,7 @@ let package = Package(
     name: "RepoDocs",
     platforms: [.macOS(.v15)],
     dependencies: [
-        .package(name: "CharmingEditor", path: "../strudel-markdown-editor"),
-        .package(url: "https://github.com/tree-sitter/swift-tree-sitter", from: "0.8.0"),
-        .package(
-            url: "https://github.com/tree-sitter-grammars/tree-sitter-markdown", from: "0.5.3"),
+        .package(url: "https://github.com/octavore/crumpet", from: "0.1.0"),
     ],
     targets: [
         // The generated C header and modulemap for the Rust core. Both, and the
@@ -26,9 +23,7 @@ let package = Package(
             name: "RepoDocs",
             dependencies: [
                 "RepoDocsCore",
-                .product(name: "CharmingEditor", package: "CharmingEditor"),
-                .product(name: "SwiftTreeSitter", package: "swift-tree-sitter"),
-                .product(name: "TreeSitterMarkdown", package: "tree-sitter-markdown"),
+                .product(name: "Crumpet", package: "crumpet"),
             ],
             path: "Sources/RepoDocs",
             linkerSettings: [

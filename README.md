@@ -21,7 +21,7 @@ axo cli       # just the `rd` binary
 
 `ARCHS="arm64 x86_64" axo core` produces a universal core.
 
-The markdown editor comes from [CharmingEditor](../strudel-markdown-editor), consumed as a local path dependency. It is upstream — we don't patch it from here.
+The markdown editor comes from [Crumpet](https://github.com/octavore/crumpet), a remote package dependency. It is upstream — we don't patch it from here.
 
 ## `rd`
 
