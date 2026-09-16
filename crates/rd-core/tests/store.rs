@@ -383,9 +383,7 @@ fn last_modified_times_reports_the_newest_commit_per_page() {
 fn non_ascii_page_paths_round_trip() {
     let f = fixture();
     let path = "notes/café/naïve.md";
-    f.store
-        .write(path.into(), "# Café\n".into(), None)
-        .unwrap();
+    f.store.write(path.into(), "# Café\n".into(), None).unwrap();
 
     assert_eq!(paths(&f.store), [path]);
     assert_eq!(f.store.read(path.into()).unwrap(), "# Café\n");
