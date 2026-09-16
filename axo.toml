@@ -4,6 +4,7 @@ project_name = "repo-docs"
 core = "scripts/build-core.sh"
 build = [":core", "strudel build"]
 run = [":core", "strudel run"]
+install = [":core", "strudel build --install"]
 # The storage-layer tests moved to Rust with the storage layer; the Swift
 # target is GUI-only now and `axo build` is what checks it compiles.
 test = "cargo test"

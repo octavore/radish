@@ -9,11 +9,12 @@ let packageDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().pat
 
 let package = Package(
     name: "RepoDocs",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v15)],
     dependencies: [
         .package(name: "CharmingEditor", path: "../strudel-markdown-editor"),
         .package(url: "https://github.com/tree-sitter/swift-tree-sitter", from: "0.8.0"),
-        .package(url: "https://github.com/tree-sitter-grammars/tree-sitter-markdown", from: "0.5.3"),
+        .package(
+            url: "https://github.com/tree-sitter-grammars/tree-sitter-markdown", from: "0.5.3"),
     ],
     targets: [
         // The generated C header and modulemap for the Rust core. Both, and the

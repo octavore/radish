@@ -62,9 +62,13 @@ lipo -create "${bins[@]}" -output "$out/rd"
 echo "==> uniffi-bindgen"
 staging=$(mktemp -d)
 trap 'rm -rf "$staging"' EXIT
-# Built for the host, not --target: this one runs here. It only reads the
-# library, and goblin parses any arch.
-cargo run --release --quiet -p rd-core --bin uniffi-bindgen -- \
+# Built for --target, matching the loop above, so this reuses those artifacts
+# rather than compiling rd-core and its dependency tree a second time for the
+# host. triples[0] is always host-runnable on an arm Mac (it leads even the
+# universal ARCHS="arm64 x86_64" build); an x86-only build on an arm host would
+# be the one case this breaks. The binary only reads the library, and goblin
+# parses any arch.
+cargo run --release --quiet -p rd-core --bin uniffi-bindgen --target "${triples[0]}" -- \
   generate --library "$root/target/${triples[0]}/release/librd_core.dylib" \
   --language swift --no-format --out-dir "$staging"
 
