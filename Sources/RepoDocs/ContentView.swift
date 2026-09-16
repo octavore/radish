@@ -156,8 +156,17 @@ struct ContentView: View {
   private var detail: some View {
     ZStack(alignment: .top) {
       editorContent
-      docToolbar
+      // Conditional rather than faded in place: `.bar` is a vibrancy material,
+      // and a material that's merely transparent still gets blurred every
+      // frame, over a document that's changing every frame, only to be
+      // composited at zero alpha. Taking it out of the tree ends that work for
+      // the whole time the bar is away, which is most of a read.
+      if showToolbar {
+        docToolbar
+          .transition(.move(edge: .top).combined(with: .opacity))
+      }
     }
+    .animation(.easeOut(duration: 0.2), value: showToolbar)
     // A hidden title bar still reserves its safe area. Reclaim it so the bar
     // starts at the window's own top edge; the bar *is* this window's title
     // bar, and the document scrolls under it from there.
@@ -229,6 +238,12 @@ struct ContentView: View {
   /// window's native toolbar, so it (background included) can fade away as
   /// the doc scrolls beneath it. The native toolbar spans the sidebar too,
   /// and can't fade only over the detail column.
+  ///
+  /// Showing and hiding belong to `detail`, which inserts and removes this
+  /// whole view with a slide-and-fade transition. It reads on screen the way
+  /// an offset and an opacity would, and the document appears to scroll the
+  /// bar off rather than dissolve it in place, but the material underneath
+  /// stops costing anything once the bar is gone.
   private var docToolbar: some View {
     HStack(spacing: 16) {
       Button {
@@ -293,14 +308,6 @@ struct ContentView: View {
     .animation(Self.sidebarAnimation, value: columnVisibility)
     .frame(height: Self.toolbarHeight)
     .background(.bar)
-    // Slides up as well as fading, so the document appears to scroll it off
-    // rather than having it dissolve in place. Hit testing goes with it: a
-    // faded-out bar must not keep intercepting clicks meant for the text
-    // underneath.
-    .offset(y: showToolbar ? 0 : -Self.toolbarHeight)
-    .opacity(showToolbar ? 1 : 0)
-    .allowsHitTesting(showToolbar)
-    .animation(.easeOut(duration: 0.2), value: showToolbar)
   }
 
   private var newPageSheet: some View {
