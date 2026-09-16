@@ -117,6 +117,30 @@ struct ContentView: View {
     // NavigationSplitView adds its own toggle at the sidebar's top edge, which
     // duplicates `docToolbar`'s. The floating bar owns that job.
     .toolbar(removing: .sidebarToggle)
+    .safeAreaInset(edge: .bottom, spacing: 0) { sidebarFooter }
+  }
+
+  /// A refresh control pinned to the sidebar's bottom edge. `rd edit` and any
+  /// other writer advances the page ref underneath a window that's already
+  /// open; this rereads it on demand.
+  @ViewBuilder
+  private var sidebarFooter: some View {
+    if model.repo != nil {
+      HStack {
+        Button {
+          Task { await model.refresh() }
+        } label: {
+          Label("Refresh", systemImage: "arrow.clockwise")
+        }
+        .buttonStyle(.borderless)
+        .keyboardShortcut("r")
+        .help("Reload pages from git")
+        Spacer()
+      }
+      .padding(.horizontal, 12)
+      .padding(.vertical, 6)
+      .background(.bar)
+    }
   }
 
   /// The folder/page outline itself, without the enclosing repo-name section.

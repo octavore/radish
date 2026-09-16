@@ -166,6 +166,30 @@ final class AppModel {
     }
   }
 
+  /// Reformats the editor buffer with rumdl, through the same `DocStore.reformat`
+  /// entry point `rd fmt` uses (so config resolution matches). It rewrites the
+  /// in-memory `text` and marks the document dirty, so the result is reviewed in
+  /// the editor and written by the normal save path rather than committed
+  /// straight to git.
+  func formatDocument() async {
+    guard let store, selection != nil else { return }
+    let current = text
+    do {
+      let formatted = try await run { try store.reformat(content: current) }
+      // The user may have typed while rumdl ran; don't clobber that.
+      guard text == current else { return }
+      guard formatted != current else {
+        status = "Already formatted"
+        return
+      }
+      text = formatted
+      isDirty = true
+      status = "Reformatted"
+    } catch {
+      errorMessage = errorText(error)
+    }
+  }
+
   func createPage(path rawPath: String) async {
     guard let store else { return }
     let trimmed = rawPath.trimmingCharacters(in: .whitespaces)

@@ -1,3 +1,4 @@
+import AppKit
 import CharmingEditor
 import SwiftUI
 
@@ -231,6 +232,10 @@ struct FormatCommands: Commands {
         Button(style.displayName) { commands?.send(.setBlockStyle(style)) }
           .keyboardShortcut(style.shortcutKey, modifiers: [.command, .option])
       }
+      Divider()
+      Button("Reformat Document") { Task { await model?.formatDocument() } }
+        .keyboardShortcut("f", modifiers: [.command, .option, .shift])
+        .disabled(model?.selection == nil)
     }
   }
 }
