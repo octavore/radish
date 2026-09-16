@@ -17,10 +17,7 @@ struct ContentView: View {
   @Bindable var model: AppModel
   @State private var commands = EditorCommands()
   @AppStorage(AppSettings.themeKey) private var themeString = ""
-  @AppStorage(Typography.titleRatioDefaultsKey) private var titleRatio = Double(
-    Typography.defaultTitleRatio)
-  @AppStorage(Typography.codeRatioDefaultsKey) private var codeRatio = Double(
-    Typography.defaultCodeRatio)
+  @AppStorage(AppSettings.editorSettingsKey) private var editorSettings = AppSettings.defaultEditorSettings
   @State private var isNaming = false
   @State private var newPath = ""
   @State private var isNamingFolder = false
@@ -172,11 +169,9 @@ struct ContentView: View {
     if model.selection != nil {
       MarkdownEditor(text: model.editorText)
         .commands(commands)
-        .editorFont(.monospaced)
-        .editorFontSize(14)
+        .editorSettings(editorSettings)
+        .editorSettingsChannel(AppSettings.editorChannel)
         .editorColorScheme(AppSettings.colorScheme(from: themeString))
-        .editorTitleRatio(titleRatio)
-        .editorCodeRatio(codeRatio)
         .editorTopContentInset(Self.toolbarHeight)
         .onScroll(handleScroll)
         .focusedSceneValue(\.editorCommands, commands)
