@@ -1,6 +1,76 @@
 import CharmingEditor
 import SwiftUI
 
+/// The repositories currently open in a window, keyed by canonical top-level
+/// path. `rd open .` on a repo that already has a window focuses that window
+/// instead of spawning a second one, and it works no matter how the first
+/// window opened it (URL, last-session restore, or the Open panel).
+@MainActor
+final class OpenRepos {
+  private final class WeakWindow {
+    weak var value: NSWindow?
+  }
+
+  private var windows: [String: WeakWindow] = [:]
+
+  /// One instance for the app. `WindowGroup` and `Settings` are separate scenes
+  /// with no shared state, and every window's `RootView` registers here.
+  static let shared = OpenRepos()
+
+  func register(_ path: String, window: NSWindow) {
+    let box = windows[path] ?? WeakWindow()
+    box.value = window
+    windows[path] = box
+  }
+
+  func unregister(_ path: String) {
+    windows[path] = nil
+  }
+
+  func contains(_ path: String) -> Bool {
+    window(for: path) != nil
+  }
+
+  /// Brings the window for `path` to the front. Returns false when no live
+  /// window is registered, so the caller can fall back to opening one.
+  @discardableResult
+  func focus(_ path: String) -> Bool {
+    guard let window = window(for: path) else { return false }
+    window.makeKeyAndOrderFront(nil)
+    NSApp.activate(ignoringOtherApps: true)
+    return true
+  }
+
+  private func window(for path: String) -> NSWindow? {
+    guard let box = windows[path] else { return nil }
+    guard let window = box.value else {
+      windows[path] = nil
+      return nil
+    }
+    return window
+  }
+}
+
+/// Namespace so call sites read `AppWindows.openRepos`.
+enum AppWindows {
+  @MainActor static var openRepos: OpenRepos { .shared }
+}
+
+/// Hands back the `NSWindow` hosting a SwiftUI view once it joins the window.
+private struct WindowAccessor: NSViewRepresentable {
+  var onChange: (NSWindow?) -> Void
+
+  func makeNSView(context: Context) -> NSView {
+    let view = NSView()
+    DispatchQueue.main.async { onChange(view.window) }
+    return view
+  }
+
+  func updateNSView(_ view: NSView, context: Context) {
+    DispatchQueue.main.async { onChange(view.window) }
+  }
+}
+
 /// The GUI. `rd` is a separate Rust binary riding along in
 /// `Contents/MacOS/rd` (see `CLIInstaller`), so this executable no longer has
 /// to decide at launch whether it's a terminal tool or an app.
@@ -11,12 +81,12 @@ struct RepoDocsApp: App {
     // every tab) owns an independent repo. Hoisting it to App would make ⌘N
     // open a second view of the *same* repo.
     //
-    // Keyed `for: URL.self` rather than a plain `WindowGroup` so `rd open .`
-    // can target a specific window: `openWindow(value:)` below focuses the
-    // existing window for that repo if there is one, instead of always
-    // spawning a new one. A window opened with no value (cold launch, ⌘N)
-    // gets `repoURL == nil` and falls back to `AppModel`'s own last-opened-repo
-    // logic.
+    // Keyed `for: URL.self` so `rd open .` can target a specific window. A
+    // window opened with no value (cold launch, ⌘N) gets `repoURL == nil` and
+    // falls back to `AppModel`'s last-opened-repo restoration. SwiftUI only
+    // dedupes windows whose `openWindow(value:)` values match, which a restored
+    // or panel-opened window never carries, so `OpenRepos` tracks every open
+    // repo by canonical path and `RootView` consults it before opening.
     WindowGroup(for: URL.self) { $repoURL in
       RootView(repoURL: repoURL)
       // .frame(minWidth: 720, minHeight: 460)
@@ -72,22 +142,39 @@ struct InstallCLICommand: View {
 
 struct RootView: View {
   @State private var model = AppModel()
+  @State private var window: NSWindow?
   @Environment(\.openWindow) private var openWindow
-  /// Non-nil when this window was opened for a specific repo (`rd open .`,
-  /// or a repo already open in an existing window that `openWindow(value:)`
-  /// re-focused). Nil for a plain new window, which falls back to
-  /// `AppModel.init()`'s own last-opened-repo restoration.
+  @Environment(\.dismiss) private var dismiss
+  /// Non-nil when this window was opened for a specific repo (`rd open .`, or a
+  /// repo already open in a window that `openWindow(value:)` re-focused). Nil
+  /// for a plain new window, which falls back to `restoreLastRepo`.
   let repoURL: URL?
 
   var body: some View {
     ContentView(model: model)
       .focusedSceneValue(\.appModel, model)
+      .background(WindowAccessor { window = $0 })
       .task(id: repoURL) {
         if let repoURL {
-          await model.open(repoURL)
+          if await model.focusIfOpenElsewhere(repoURL) {
+            dismiss()
+          } else {
+            await model.open(repoURL)
+          }
         } else {
           await model.restoreLastRepo()
         }
+      }
+      // Keep the open-repos registry in step with this window: whichever of the
+      // window handle or the resolved repo arrives second completes the entry,
+      // and closing the window (or swapping its repo) clears the old one.
+      .onChange(of: window) { _, _ in syncRegistration() }
+      .onChange(of: model.repo) { old, _ in
+        if let old { AppWindows.openRepos.unregister(old.path) }
+        syncRegistration()
+      }
+      .onDisappear {
+        if let repo = model.repo { AppWindows.openRepos.unregister(repo.path) }
       }
       // `onOpenURL` is a `View` modifier, not a `Scene` one, so it's here
       // rather than on the `WindowGroup` itself; it fires regardless of
@@ -98,6 +185,11 @@ struct RootView: View {
         guard let path = Self.repoPath(from: url) else { return }
         openWindow(value: URL(fileURLWithPath: path))
       }
+  }
+
+  private func syncRegistration() {
+    guard let window, let repo = model.repo else { return }
+    AppWindows.openRepos.register(repo.path, window: window)
   }
 
   /// Parses `repodocs://open?path=<repo path>`, as sent by `rd open .`/`rd .`.
@@ -126,6 +218,7 @@ struct OpenRepositoryCommand: View {
 /// value so the menu stays decoupled from the view.
 struct FormatCommands: Commands {
   @FocusedValue(\.editorCommands) private var commands
+  @FocusedValue(\.appModel) private var model
 
   var body: some Commands {
     CommandMenu("Format") {

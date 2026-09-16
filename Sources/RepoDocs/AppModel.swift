@@ -48,10 +48,31 @@ final class AppModel {
     guard repo == nil, store == nil,
       let saved = UserDefaults.standard.string(forKey: Self.repoKey)
     else { return }
+    // Another window already holds this repo (a second window from ⌘N, say).
+    // Leave this one on the empty state rather than opening a duplicate.
+    guard !AppWindows.openRepos.contains(saved) else { return }
     let url = URL(fileURLWithPath: saved)
     let isRepo = (try? await run { isRepository(path: url.path) }) ?? false
     guard isRepo else { return }
     await open(url)
+  }
+
+  /// Resolves `url` to the top level of its git repository, matching the path
+  /// `rd open` sends. Returns nil when `url` isn't inside a repo.
+  func repoRoot(for url: URL) async -> URL? {
+    let path = url.path
+    let resolved = (try? await run { discoverRepository(path: path) }) ?? nil
+    return resolved.map { URL(fileURLWithPath: $0) }
+  }
+
+  /// Brings an existing window for `url`'s repo to the front, when one is open
+  /// and it isn't this window. Returns true when it did, so the caller can
+  /// dismiss the redundant window it was about to fill.
+  func focusIfOpenElsewhere(_ url: URL) async -> Bool {
+    guard let root = await repoRoot(for: url), root.path != repo?.path else {
+      return false
+    }
+    return AppWindows.openRepos.focus(root.path)
   }
 
   /// Binding handed to the editor. Edits mark the document dirty; loads from
@@ -77,16 +98,22 @@ final class AppModel {
     panel.message = "Choose a git repository."
     panel.directoryURL = repo
     guard panel.runModal() == .OK, let url = panel.url else { return }
-    Task { await open(url) }
+    Task {
+      if await focusIfOpenElsewhere(url) { return }
+      await open(url)
+    }
   }
 
-  /// Opens `url` as the window's repository. The `DocStore` construction shells
-  /// out to git, so it runs off the main actor; everything after it is main-actor
-  /// state assignment.
+  /// Opens `url` as the window's repository. The path is first resolved to the
+  /// repo's top level, so a subdirectory or symlinked path still keys the window
+  /// by the same canonical path `rd open` uses. The `DocStore` construction
+  /// shells out to git, so it runs off the main actor; everything after it is
+  /// main-actor state assignment.
   func open(_ url: URL) async {
+    let root = await repoRoot(for: url) ?? url
     let opened: DocStore
     do {
-      opened = try await run { try DocStore(root: url.path) }
+      opened = try await run { try DocStore(root: root.path) }
     } catch {
       errorMessage = errorText(error)
       return
@@ -102,9 +129,9 @@ final class AppModel {
     text = ""
     isDirty = false
 
-    repo = url
+    repo = root
     store = opened
-    UserDefaults.standard.set(url.path, forKey: Self.repoKey)
+    UserDefaults.standard.set(root.path, forKey: Self.repoKey)
     await refresh()
   }
 
