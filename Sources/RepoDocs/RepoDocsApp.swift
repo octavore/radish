@@ -169,7 +169,16 @@ struct RootView: View {
       // Keep the open-repos registry in step with this window: whichever of the
       // window handle or the resolved repo arrives second completes the entry,
       // and closing the window (or swapping its repo) clears the old one.
-      .onChange(of: window) { _, _ in syncRegistration() }
+      .onChange(of: window) { _, new in
+        // AppKit's window-state restoration was widening the sidebar on
+        // every relaunch (see `ContentView.sidebarWidth`, which now owns
+        // that value). SwiftUI has no scene modifier for this, so it's
+        // disabled on the NSWindow directly. Repo, selection, and editor
+        // state still restore through `AppModel` and `@AppStorage`; only
+        // window position and size are lost across quits.
+        new?.isRestorable = false
+        syncRegistration()
+      }
       .onChange(of: model.repo) { old, _ in
         if let old { AppWindows.openRepos.unregister(old.path) }
         syncRegistration()

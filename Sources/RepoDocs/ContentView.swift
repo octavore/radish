@@ -28,6 +28,11 @@ struct ContentView: View {
   /// the document.
   @State private var showToolbar = true
   @State private var columnVisibility = NavigationSplitViewVisibility.all
+  /// Drives the sidebar's `ideal` width instead of letting AppKit's
+  /// window-state restoration set it. Restoration rounded the saved
+  /// proportion to pixels with no cap, so the column grew wider on each
+  /// relaunch. See `NSWindow.isRestorable = false` in `RepoDocsApp`.
+  @AppStorage("sidebarWidth") private var sidebarWidth: Double = 220
   /// The last offset `handleScroll` saw, and how far the current unbroken run
   /// in one direction has travelled. Plain properties on a class box, not
   /// `@State`: they change on every scroll tick and only `showToolbar` should
@@ -110,11 +115,16 @@ struct ContentView: View {
           description: Text("Create one to get started."))
       }
     }
-    .navigationSplitViewColumnWidth(min: 180, ideal: 220)
+    .navigationSplitViewColumnWidth(min: 180, ideal: sidebarWidth, max: 320)
     // NavigationSplitView adds its own toggle at the sidebar's top edge, which
     // duplicates `docToolbar`'s. The floating bar owns that job.
     .toolbar(removing: .sidebarToggle)
     .safeAreaInset(edge: .bottom, spacing: 0) { sidebarFooter }
+    // Tracks the user's manual resizes into `sidebarWidth`. Without this the
+    // sidebar snaps back to the stored width on every relaunch.
+    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { newWidth in
+      sidebarWidth = newWidth
+    }
   }
 
   /// A refresh control pinned to the sidebar's bottom edge. `rd edit` and any
