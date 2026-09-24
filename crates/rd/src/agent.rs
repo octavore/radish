@@ -101,4 +101,27 @@ pub const HELP: &str = indoc! {"
           guard in `replace`); re-read, reapply, retry
     `rd grep` follows grep instead: 0 on a match, 1 on none, 2 on an error.
     Errors go to stderr as one line starting 'rd: '.
+
+    To point other agents at rd, paste the output of `rd agent --snippet`
+    into the repo's CLAUDE.md or AGENTS.md.
+"};
+
+/// `rd agent --snippet`: a section for a repo's CLAUDE.md or AGENTS.md. Kept
+/// short, since it loads into every session; it points at `rd agent` for the
+/// rest.
+pub const SNIPPET: &str = indoc! {"
+    ## Docs live in `rd`, not the working tree
+
+    This repo's docs are stored in git under `refs/docs/pages`, outside the
+    working tree, so file tools and grep cannot see them. Use the `rd` CLI:
+
+    - `rd list`, `rd cat --all`: list, or load every doc in one call
+    - `rd cat <path>`, `rd grep <regex>`: read and search
+    - `rd replace <path> <old> <new>`: change exact text that occurs once
+    - `rd edit <path> - --expect <oid>`: rewrite a doc from stdin; `rd cat`
+      prints the OID to stderr, and exit status 3 means the doc changed
+      since you read it
+    - `rd mv`, `rd rm`; every write takes `-m <message>`
+
+    Run `rd agent` for the full usage notes.
 "};

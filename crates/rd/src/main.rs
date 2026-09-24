@@ -129,7 +129,12 @@ enum Cmd {
         path: String,
     },
     /// Usage notes for AI agents editing docs via rd
-    Agent,
+    Agent {
+        /// Print a short markdown section to paste into CLAUDE.md or
+        /// AGENTS.md instead
+        #[arg(long)]
+        snippet: bool,
+    },
     /// (Re)install this helper to ~/.local/bin/rd
     Install,
 
@@ -165,8 +170,15 @@ fn run() -> Result<()> {
 
     // These two need no repository, so they come before discovery.
     match &cli.command {
-        Some(Cmd::Agent) => {
-            print!("{}", agent::HELP);
+        Some(Cmd::Agent { snippet }) => {
+            print!(
+                "{}",
+                if *snippet {
+                    agent::SNIPPET
+                } else {
+                    agent::HELP
+                }
+            );
             return Ok(());
         },
         Some(Cmd::Install) => return install(),
@@ -221,7 +233,7 @@ fn run() -> Result<()> {
                 cat(&store, &args, false, false)
             }
         },
-        Some(Cmd::Agent | Cmd::Install) => unreachable!("handled above"),
+        Some(Cmd::Agent { .. } | Cmd::Install) => unreachable!("handled above"),
     };
     result.map_err(|error| with_suggestions(&store, error))
 }
