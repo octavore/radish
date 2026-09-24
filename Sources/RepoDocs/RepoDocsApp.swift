@@ -74,7 +74,7 @@ enum SplitViewAutosave {
 }
 
 /// Hands back the `NSWindow` hosting a SwiftUI view once it joins the window.
-private struct WindowAccessor: NSViewRepresentable {
+struct WindowAccessor: NSViewRepresentable {
   var onChange: (NSWindow?) -> Void
 
   func makeNSView(context: Context) -> NSView {

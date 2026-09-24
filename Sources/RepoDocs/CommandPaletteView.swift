@@ -1,3 +1,4 @@
+import AppKit
 import RepoDocsCore
 import SwiftUI
 
@@ -17,6 +18,8 @@ struct CommandPaletteView: View {
   @State private var results: [FuzzyMatch] = []
   @State private var highlighted = 0
   @FocusState private var fieldFocused: Bool
+  @State private var window: NSWindow?
+  @State private var keyMonitor: Any?
 
   private static let limit: UInt32 = 50
   private static let rowHeight: CGFloat = 40
@@ -32,16 +35,6 @@ struct CommandPaletteView: View {
           .font(.title3)
           .focused($fieldFocused)
           .onSubmit(openHighlighted)
-          .onKeyPress(.upArrow) { move(-1) }
-          .onKeyPress(.downArrow) { move(1) }
-          .onKeyPress(characters: ["p", "n"], phases: .down) { press in
-            guard press.modifiers == .control else { return .ignored }
-            return move(press.characters == "p" ? -1 : 1)
-          }
-          .onKeyPress(.escape) {
-            onDismiss()
-            return .handled
-          }
       }
       .padding(.horizontal, 14)
       .padding(.vertical, 12)
@@ -55,7 +48,12 @@ struct CommandPaletteView: View {
         .strokeBorder(.separator)
     }
     .shadow(color: .black.opacity(0.2), radius: 24, y: 8)
-    .onAppear { fieldFocused = true }
+    .background(WindowAccessor { window = $0 })
+    .onAppear {
+      fieldFocused = true
+      installKeyMonitor()
+    }
+    .onDisappear(perform: removeKeyMonitor)
     .onChange(of: query, initial: true) { search() }
     .onChange(of: paths) { search() }
   }
@@ -140,10 +138,38 @@ struct CommandPaletteView: View {
     highlighted = 0
   }
 
-  private func move(_ step: Int) -> KeyPress.Result {
-    guard !results.isEmpty else { return .handled }
+  /// Handles the palette's navigation keys ahead of the text field. The
+  /// field editor behind a `TextField` consumes ↑, ↓, ⌃P, and ⌃N as cursor
+  /// movement, so `.onKeyPress` on the field never sees them. The monitor
+  /// only acts on events for this palette's window.
+  private func installKeyMonitor() {
+    guard keyMonitor == nil else { return }
+    keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+      guard event.window === window else { return event }
+      let modifiers = event.modifierFlags
+        .intersection(.deviceIndependentFlagsMask)
+        .subtracting([.numericPad, .function])
+      let key = event.charactersIgnoringModifiers
+      switch (event.keyCode, modifiers) {
+      case (126, []): move(-1)
+      case (125, []): move(1)
+      case (53, []): onDismiss()
+      case (_, .control) where key == "p": move(-1)
+      case (_, .control) where key == "n": move(1)
+      default: return event
+      }
+      return nil
+    }
+  }
+
+  private func removeKeyMonitor() {
+    if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+    keyMonitor = nil
+  }
+
+  private func move(_ step: Int) {
+    guard !results.isEmpty else { return }
     highlighted = (highlighted + step + results.count) % results.count
-    return .handled
   }
 
   private func openHighlighted() {
