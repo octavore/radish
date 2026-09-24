@@ -1300,6 +1300,7 @@ dependencies = [
  "clml",
  "indoc",
  "rd-core",
+ "regex",
  "tempfile",
  "tree-sitter",
  "tree-sitter-md",

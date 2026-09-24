@@ -4,6 +4,7 @@
 //! app links through UniFFI, so the CLI and the GUI stay in sync.
 
 mod agent;
+mod grep;
 mod markdown;
 mod open;
 mod relative;
@@ -56,6 +57,8 @@ enum Cmd {
         #[arg(long)]
         check: bool,
     },
+    /// Search doc content for a regex
+    Grep(grep::GrepArgs),
     /// Dump every doc to a directory (default: a fresh tmpdir)
     Export { dir: Option<PathBuf> },
     /// Open a doc, or '.' for the current repo, in the RepoDocs app
@@ -103,6 +106,17 @@ fn run() -> Result<()> {
         Some(Cmd::Edit { path, file }) => edit(&store, &path, file.as_deref()),
         Some(Cmd::Rm { path }) => remove(&store, &path),
         Some(Cmd::Fmt { path, check }) => format(&store, path.as_deref(), check),
+        Some(Cmd::Grep(args)) => {
+            // Like ripgrep: 0 on a match, 1 on no match, 2 on an error.
+            match grep::run(&store, &args) {
+                Ok(true) => Ok(()),
+                Ok(false) => std::process::exit(1),
+                Err(error) => {
+                    ceprintln!("<red>rd:</> {error:#}");
+                    std::process::exit(2);
+                },
+            }
+        },
         Some(Cmd::Export { dir }) => export(&store, dir),
         Some(Cmd::Open { path }) => open_page(&store, &root, &path),
         Some(Cmd::Shorthand(args)) => {

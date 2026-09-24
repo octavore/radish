@@ -32,6 +32,9 @@ rd cat design/auth.md    # print one (colorized on a tty)
 rd design/auth.md        # shorthand for `rd cat`
 rd edit design/auth.md   # $EDITOR; or `- ` for stdin, or a file path
 rd rm design/auth.md
+rd grep -i stateless     # search every doc. `rd grep --help` to see all flags.
+rd grep -l auth design   # only docs under design/, paths only
+rd fmt [path] [--check]  # reformat one doc, or all, with rumdl
 rd export [dir]          # dump every doc to a directory
 rd .                     # open this repo in the app
 rd install               # symlink ~/.local/bin/rd

@@ -18,6 +18,17 @@ pub const HELP: &str = indoc! {"
       rd cat <path>         print a doc's content
       rd <path>             shorthand for 'rd cat <path>'
 
+    Searching (grep-style flags; your own grep can't see docs):
+      rd grep <regex>               print path:line:text for every match
+      rd grep <regex> design        only docs under design/ (or one doc path)
+      rd grep -l <regex>            only the paths of docs that match
+      rd grep -F -i 'some text'     literal, case-insensitive
+      rd grep -C 2 <regex>          two lines of context around each match
+    Also: -S smart case, -w whole word, -v invert, -L paths without a
+    match, -c count per doc, -o only the matched text, -N no line numbers,
+    -m NUM max matches per doc, -A/-B NUM context after/before. Exit status
+    is 0 on a match, 1 on none, 2 on an error.
+
     Editing, recommended flow:
       1. rd export /tmp/some-dir     dump every doc to a scratch directory
       2. edit file(s) there with your normal file tools
