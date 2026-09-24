@@ -40,6 +40,10 @@ enum Cmd {
         /// Sort newest-modified first
         #[arg(short = 't', long = "by-date")]
         by_date: bool,
+        /// Print a JSON array of {path, blob, size, modified} (modified is
+        /// Unix seconds, or null)
+        #[arg(long)]
+        json: bool,
     },
     /// Print a doc's content
     Cat { path: String },
@@ -129,8 +133,8 @@ fn run() -> Result<()> {
     let store = DocStore::open(&root);
 
     let result = match cli.command {
-        None => list(&store, false),
-        Some(Cmd::List { by_date }) => list(&store, by_date),
+        None => list(&store, false, false),
+        Some(Cmd::List { by_date, json }) => list(&store, by_date, json),
         Some(Cmd::Cat { path }) => cat(&store, &path),
         Some(Cmd::Edit { path, file, expect }) => {
             edit(&store, &path, file.as_deref(), expect.as_deref())
@@ -189,10 +193,14 @@ fn with_suggestions(store: &DocStore, error: anyhow::Error) -> anyhow::Error {
     anyhow!("{error}; did you mean {}?", matches.join(", "))
 }
 
-fn list(store: &DocStore, by_date: bool) -> Result<()> {
+fn list(store: &DocStore, by_date: bool, json: bool) -> Result<()> {
+    if json {
+        return list_json(store, by_date);
+    }
     let pages = store.list_pages()?;
+    // Nothing on stdout, so a script reading paths sees an empty list.
     if pages.is_empty() {
-        println!("No pages yet");
+        eprintln!("rd: no docs yet");
         return Ok(());
     }
     if !by_date {
@@ -223,6 +231,35 @@ fn list(store: &DocStore, by_date: bool) -> Result<()> {
             None => println!("{}", page.path),
         }
     }
+    Ok(())
+}
+
+/// `rd list --json`: one array, sorted by path or, with `by_date`, newest
+/// first.
+fn list_json(store: &DocStore, by_date: bool) -> Result<()> {
+    let modified = store.last_modified_times()?;
+    let seconds = |path: &str| {
+        modified
+            .get(path)
+            .and_then(|date| date.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|elapsed| elapsed.as_secs())
+    };
+    let mut entries = store.list_entries()?;
+    if by_date {
+        entries.sort_by_key(|entry| std::cmp::Reverse(seconds(&entry.path)));
+    }
+    let rows: Vec<serde_json::Value> = entries
+        .iter()
+        .map(|entry| {
+            serde_json::json!({
+                "path": entry.path,
+                "blob": entry.blob,
+                "size": entry.size,
+                "modified": seconds(&entry.path),
+            })
+        })
+        .collect();
+    println!("{}", serde_json::to_string_pretty(&rows)?);
     Ok(())
 }
 

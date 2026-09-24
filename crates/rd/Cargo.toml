@@ -17,6 +17,7 @@ clap_complete.workspace = true
 clml = { workspace = true, features = ["anstream"] }
 indoc.workspace = true
 regex.workspace = true
+serde_json.workspace = true
 tempfile.workspace = true
 tree-sitter.workspace = true
 tree-sitter-md.workspace = true

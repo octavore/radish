@@ -10,6 +10,14 @@ pub struct Page {
     pub path: String,
 }
 
+/// A page as `ls-tree -l` sees it. Rust-only; not part of the FFI.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PageEntry {
+    pub path: String,
+    pub blob: String,
+    pub size: u64,
+}
+
 impl Page {
     pub fn new(path: impl Into<String>) -> Self {
         Self { path: path.into() }

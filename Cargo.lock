@@ -1305,6 +1305,7 @@ dependencies = [
  "indoc",
  "rd-core",
  "regex",
+ "serde_json",
  "tempfile",
  "tree-sitter",
  "tree-sitter-md",

@@ -4,7 +4,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::error::{Result, StoreError};
 use crate::git::Git;
-use crate::types::{Conflict, MergeResult, Page, PageInfo, Revision};
+use crate::types::{Conflict, MergeResult, Page, PageEntry, PageInfo, Revision};
 
 pub const PAGES_REF: &str = "refs/docs/pages";
 pub const NOTES_REF: &str = "refs/notes/annotations";
@@ -53,6 +53,34 @@ impl DocStore {
 
     pub fn root(&self) -> &Path {
         &self.git.root
+    }
+
+    /// Every page with its blob OID and size in bytes, sorted by path, from a
+    /// single `ls-tree`.
+    pub fn list_entries(&self) -> Result<Vec<PageEntry>> {
+        if self.git.resolve(PAGES_REF).is_none() {
+            return Ok(Vec::new());
+        }
+        let listing = self
+            .git
+            .run(&["ls-tree", "-r", "-l", "-z", PAGES_REF])?;
+        // Each entry is `<mode> <type> <oid> <size>\t<path>`.
+        let mut entries: Vec<PageEntry> = String::from_utf8_lossy(&listing)
+            .split('\0')
+            .filter_map(|entry| {
+                let (meta, path) = entry.split_once('\t')?;
+                let mut fields = meta.split_whitespace();
+                let blob = fields.nth(2)?.to_string();
+                let size = fields.next()?.parse().ok()?;
+                Some(PageEntry {
+                    path: path.to_string(),
+                    blob,
+                    size,
+                })
+            })
+            .collect();
+        entries.sort_by(|a, b| a.path.cmp(&b.path));
+        Ok(entries)
     }
 
     /// Reads a page and its blob OID, both from one resolution of the ref tip,

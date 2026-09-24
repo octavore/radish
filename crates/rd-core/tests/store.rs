@@ -376,6 +376,22 @@ fn glob_characters_in_a_path_are_literal() {
 }
 
 #[test]
+fn list_entries_reports_blob_and_size() {
+    let f = fixture();
+    f.store
+        .write("b/two.md".into(), "two\n".into(), None)
+        .unwrap();
+    f.store.write("a.md".into(), "one\n".into(), None).unwrap();
+
+    let entries = f.store.list_entries().unwrap();
+    let paths: Vec<&str> = entries.iter().map(|entry| entry.path.as_str()).collect();
+    assert_eq!(paths, ["a.md", "b/two.md"]);
+    assert_eq!(entries[0].size, 4);
+    let (_, blob) = f.store.read_with_blob("a.md").unwrap();
+    assert_eq!(entries[0].blob, blob);
+}
+
+#[test]
 fn diverged_edits_merge_cleanly() {
     let f = fixture();
     f.store

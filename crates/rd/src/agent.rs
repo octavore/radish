@@ -15,10 +15,12 @@ pub const HELP: &str = indoc! {"
     Reading:
       rd                    list every doc
       rd list -t            list, newest edited first
+      rd list --json        JSON array of {path, blob, size, modified}
       rd cat <path>         print a doc's content
       rd <path>             shorthand for 'rd cat <path>'
 
     A missing path fails with 'no such page' and suggests close matches.
+    An empty store prints nothing on stdout.
 
     Searching (grep-style flags; your own grep can't see docs):
       rd grep <regex>               print path:line:text for every match
