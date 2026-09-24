@@ -1,7 +1,7 @@
 //! Ported from `Tests/RepoDocsTests/DocStoreTests.swift`.
 
 use rd_core::store::{pages_upstream, PAGES_REF};
-use rd_core::{DocStore, Git, MergeResult};
+use rd_core::{DocStore, Git, MergeResult, StoreError};
 use tempfile::TempDir;
 
 /// A throwaway repository with one empty root commit, plus the store under
@@ -191,6 +191,54 @@ fn concurrent_write_loses_the_race_instead_of_clobbering() {
 
     // The other writer's page is still there.
     assert_eq!(f.store.read("b.md".into()).unwrap(), "other writer\n");
+}
+
+#[test]
+fn expected_blob_rejects_a_stale_write() {
+    let f = fixture();
+    f.store.write("a.md".into(), "one\n".into(), None).unwrap();
+    let (content, blob) = f.store.read_with_blob("a.md").unwrap();
+    assert_eq!(content, "one\n");
+
+    // Someone else edits the same page after we read it.
+    f.store.write("a.md".into(), "two\n".into(), None).unwrap();
+
+    let error = f
+        .store
+        .write_expecting("a.md", "mine\n", None, Some(&blob))
+        .unwrap_err();
+    assert!(matches!(error, StoreError::Stale { .. }));
+    assert_eq!(f.store.read("a.md".into()).unwrap(), "two\n");
+}
+
+#[test]
+fn expected_blob_ignores_changes_to_other_pages() {
+    let f = fixture();
+    f.store.write("a.md".into(), "one\n".into(), None).unwrap();
+    let (_, blob) = f.store.read_with_blob("a.md").unwrap();
+
+    f.store
+        .write("b.md".into(), "other\n".into(), None)
+        .unwrap();
+
+    f.store
+        .write_expecting("a.md", "mine\n", None, Some(&blob))
+        .unwrap();
+    assert_eq!(f.store.read("a.md".into()).unwrap(), "mine\n");
+}
+
+#[test]
+fn expected_blob_rejects_a_deleted_page() {
+    let f = fixture();
+    f.store.write("a.md".into(), "one\n".into(), None).unwrap();
+    let (_, blob) = f.store.read_with_blob("a.md").unwrap();
+    f.store.delete("a.md".into()).unwrap();
+
+    let error = f
+        .store
+        .write_expecting("a.md", "mine\n", None, Some(&blob))
+        .unwrap_err();
+    assert!(matches!(error, StoreError::Stale { .. }));
 }
 
 #[test]

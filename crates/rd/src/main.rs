@@ -45,6 +45,10 @@ enum Cmd {
         path: String,
         /// A file to read the new content from, or '-' for stdin
         file: Option<String>,
+        /// Fail unless the doc's current blob OID is this one (`rd cat` prints
+        /// it to stderr)
+        #[arg(long, value_name = "OID")]
+        expect: Option<String>,
     },
     /// Delete a doc
     #[command(alias = "delete")]
@@ -103,11 +107,13 @@ fn run() -> Result<()> {
         None => list(&store, false),
         Some(Cmd::List { by_date }) => list(&store, by_date),
         Some(Cmd::Cat { path }) => cat(&store, &path),
-        Some(Cmd::Edit { path, file }) => edit(&store, &path, file.as_deref()),
+        Some(Cmd::Edit { path, file, expect }) => {
+            edit(&store, &path, file.as_deref(), expect.as_deref())
+        },
         Some(Cmd::Rm { path }) => remove(&store, &path),
         Some(Cmd::Fmt { path, check }) => format(&store, path.as_deref(), check),
         Some(Cmd::Grep(args)) => {
-            // Like ripgrep: 0 on a match, 1 on no match, 2 on an error.
+            // Like grep: 0 on a match, 1 on no match, 2 on an error.
             match grep::run(&store, &args) {
                 Ok(true) => Ok(()),
                 Ok(false) => std::process::exit(1),
@@ -168,14 +174,18 @@ fn list(store: &DocStore, by_date: bool) -> Result<()> {
     Ok(())
 }
 
+/// Prints a page. When stdout is not a terminal, the page's blob OID also goes
+/// to stderr, for a later `rd edit --expect` to guard against.
 fn cat(store: &DocStore, path: &str) -> Result<()> {
-    let content = store.read(path.to_string())?;
+    let (content, blob) = store.read_with_blob(path)?;
     // `print!`, not `println!`: pages end in their own newline, and the tty
     // branch shouldn't add a blank line the piped branch doesn't.
     if std::io::stdout().is_terminal() {
         print!("{}", markdown::colorize(&content));
     } else {
         print!("{content}");
+        std::io::stdout().flush()?;
+        eprintln!("rd: blob {blob} (pass to rd edit --expect to reject a stale write)");
     }
     Ok(())
 }
@@ -184,30 +194,44 @@ fn cat(store: &DocStore, path: &str) -> Result<()> {
 /// `$EDITOR` on the page's current content when no file is given. Creates the
 /// page if it doesn't exist yet, same as `DocStore::write`. There is no
 /// separate "new" command.
-fn edit(store: &DocStore, path: &str, file: Option<&str>) -> Result<()> {
-    let content = match file {
+///
+/// With `expect`, the write is rejected unless the page's blob OID still equals
+/// it. The `$EDITOR` path always guards against the OID it opened with.
+fn edit(store: &DocStore, path: &str, file: Option<&str>, expect: Option<&str>) -> Result<()> {
+    let (content, opened) = match file {
         Some("-") => {
             let mut buffer = String::new();
             std::io::stdin()
                 .read_to_string(&mut buffer)
                 .context("reading stdin")?;
-            buffer
+            (buffer, None)
         },
         Some(file) => {
-            std::fs::read_to_string(file).with_context(|| format!("can't read {file}"))?
+            let content =
+                std::fs::read_to_string(file).with_context(|| format!("can't read {file}"))?;
+            (content, None)
         },
         None => edit_interactively(store, path)?,
     };
-    store.write(path.to_string(), content, None)?;
+    store.write_expecting(path, &content, None, expect.or(opened.as_deref()))?;
     println!("wrote {path}");
     Ok(())
 }
 
 /// Opens `$EDITOR` (falling back to `vi`) on a scratch file seeded with the
-/// page's current content, if any, and returns what the editor left behind.
-fn edit_interactively(store: &DocStore, path: &str) -> Result<String> {
+/// page's current content, if any, and returns what the editor left behind
+/// along with the blob OID it started from.
+fn edit_interactively(store: &DocStore, path: &str) -> Result<(String, Option<String>)> {
+    // An editor with no terminal blocks forever or garbles output, which is how
+    // an agent calling `rd edit <path>` from a non-interactive shell ends up.
+    if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        bail!("no terminal for $EDITOR; pass '-' to read stdin, or a file to read from");
+    }
     let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
-    let existing = store.read(path.to_string()).unwrap_or_default();
+    let (existing, opened) = match store.read_with_blob(path) {
+        Ok((content, blob)) => (content, Some(blob)),
+        Err(_) => (String::new(), None),
+    };
 
     let dir = tempfile::Builder::new().prefix("rd-edit-").tempdir()?;
     let name = Path::new(path)
@@ -231,8 +255,9 @@ fn edit_interactively(store: &DocStore, path: &str) -> Result<String> {
         );
     }
 
-    std::fs::read_to_string(&scratch)
-        .with_context(|| format!("can't read back {}", scratch.display()))
+    let content = std::fs::read_to_string(&scratch)
+        .with_context(|| format!("can't read back {}", scratch.display()))?;
+    Ok((content, opened))
 }
 
 /// Reformats one doc, or every doc when `path` is `None`, running each through

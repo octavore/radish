@@ -39,11 +39,19 @@ pub const HELP: &str = indoc! {"
 
     For a single doc, skip export and round-trip through a file directly:
       rd cat design/auth.md > /tmp/auth.md
+      # stderr: rd: blob 3f2a... (pass to rd edit --expect ...)
       # edit /tmp/auth.md
-      rd edit design/auth.md /tmp/auth.md
+      rd edit design/auth.md /tmp/auth.md --expect 3f2a...
 
-    `rd edit <path>` with no file opens the doc in $EDITOR. `rd edit <path> -`
-    reads from stdin, so a heredoc works with no scratch file needed:
+    When stdout is not a terminal, `rd cat` prints the doc's blob OID to
+    stderr. Pass it to `rd edit --expect` so the write fails if someone else
+    changed that doc after you read it. Without --expect, `rd edit`
+    overwrites whatever is there. On a rejected write, `rd cat` again,
+    reapply your change, and retry.
+
+    `rd edit <path> -` reads from stdin, so a heredoc works with no scratch
+    file needed. `rd edit <path>` with no file opens $EDITOR and fails when
+    there is no terminal, so always pass '-' or a file:
       rd edit design/auth.md - <<'EOF'
       # Auth
       Sessions are stateless.
@@ -58,6 +66,4 @@ pub const HELP: &str = indoc! {"
       rd fmt --check        list docs that need formatting, exit non-zero
 
     `rd edit` both creates and updates; there is no separate 'new' command.
-    Writes are compare-and-swap against the doc ref, so a concurrent writer
-    is rejected rather than silently clobbered; on failure, re-read and retry.
 "};

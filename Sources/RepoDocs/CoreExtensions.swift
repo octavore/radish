@@ -59,7 +59,7 @@ func errorText(_ error: Error) -> String {
   guard let error = error as? StoreError else { return error.localizedDescription }
   switch error {
   case let .Git(message), let .Spawn(message), let .NotARepository(message),
-    let .Io(message), let .NotUtf8(message):
+    let .Io(message), let .NotUtf8(message), let .Stale(message):
     return message
   }
 }

@@ -26,6 +26,13 @@ pub enum StoreError {
 
     #[error("{0} is not valid UTF-8")]
     NotUtf8(String),
+
+    #[error("{path} changed since it was read (expected blob {expected}, found {actual})")]
+    Stale {
+        path: String,
+        expected: String,
+        actual: String,
+    },
 }
 
 impl StoreError {

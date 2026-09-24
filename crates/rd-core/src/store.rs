@@ -54,6 +54,75 @@ impl DocStore {
     pub fn root(&self) -> &Path {
         &self.git.root
     }
+
+    /// Reads a page and its blob OID, both from one resolution of the ref tip,
+    /// so the OID describes exactly the content returned. Pass the OID back to
+    /// `write_expecting` to reject the write if the page changed in between.
+    pub fn read_with_blob(&self, path: &str) -> Result<(String, String)> {
+        let tip = self
+            .git
+            .resolve(PAGES_REF)
+            .unwrap_or_else(|| PAGES_REF.to_string());
+        let blob = self.git.text(&["rev-parse", &format!("{tip}:{path}")])?;
+        let bytes = self.git.run(&["cat-file", "-p", &blob])?;
+        let content =
+            String::from_utf8(bytes).map_err(|_| StoreError::NotUtf8(path.to_string()))?;
+        Ok((content, blob))
+    }
+
+    /// `write`, but when `expected_blob` is given the write fails with
+    /// `StoreError::Stale` unless the page's current blob OID equals it. The
+    /// check reads the same ref tip the compare-and-swap later guards, so a
+    /// change landing between the check and the swap is rejected too. Changes
+    /// to other pages do not count.
+    pub fn write_expecting(
+        &self,
+        path: &str,
+        content: &str,
+        message: Option<String>,
+        expected_blob: Option<&str>,
+    ) -> Result<()> {
+        let old = self.git.resolve(PAGES_REF);
+
+        if let Some(expected) = expected_blob {
+            let actual = old
+                .as_ref()
+                .and_then(|old| self.git.resolve(&format!("{old}:{path}")));
+            if actual.as_deref() != Some(expected) {
+                return Err(StoreError::Stale {
+                    path: path.to_string(),
+                    expected: expected.to_string(),
+                    actual: actual.unwrap_or_else(|| "none".to_string()),
+                });
+            }
+        }
+
+        let tree = self.git.with_temporary_index(|env| {
+            if let Some(old) = &old {
+                self.git.run_with(&["read-tree", old], None, env)?;
+            }
+            let blob = self.git.text_with(
+                &["hash-object", "-w", "--stdin"],
+                Some(content.as_bytes()),
+                env,
+            )?;
+            self.git.run_with(
+                &[
+                    "update-index",
+                    "--add",
+                    "--cacheinfo",
+                    &format!("100644,{blob},{path}"),
+                ],
+                None,
+                env,
+            )?;
+            self.git.text_with(&["write-tree"], None, env)
+        })?;
+
+        let message = message.unwrap_or_else(|| format!("docs: update {path}"));
+        let message = self.stamp_repo_commit(&message);
+        self.commit_and_swap(&tree, old.as_slice(), &message, old.as_deref())
+    }
 }
 
 #[uniffi::export]
@@ -122,33 +191,7 @@ impl DocStore {
     /// `<old>`, so a concurrent writer loses the race instead of silently
     /// clobbering us.
     pub fn write(&self, path: String, content: String, message: Option<String>) -> Result<()> {
-        let old = self.git.resolve(PAGES_REF);
-
-        let tree = self.git.with_temporary_index(|env| {
-            if let Some(old) = &old {
-                self.git.run_with(&["read-tree", old], None, env)?;
-            }
-            let blob = self.git.text_with(
-                &["hash-object", "-w", "--stdin"],
-                Some(content.as_bytes()),
-                env,
-            )?;
-            self.git.run_with(
-                &[
-                    "update-index",
-                    "--add",
-                    "--cacheinfo",
-                    &format!("100644,{blob},{path}"),
-                ],
-                None,
-                env,
-            )?;
-            self.git.text_with(&["write-tree"], None, env)
-        })?;
-
-        let message = message.unwrap_or_else(|| format!("docs: update {path}"));
-        let message = self.stamp_repo_commit(&message);
-        self.commit_and_swap(&tree, old.as_slice(), &message, old.as_deref())
+        self.write_expecting(&path, &content, message, None)
     }
 
     pub fn delete(&self, path: String) -> Result<()> {
