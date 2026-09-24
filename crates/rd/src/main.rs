@@ -305,14 +305,15 @@ fn list_json(store: &DocStore, by_date: bool) -> Result<()> {
     Ok(())
 }
 
-/// Prints one doc, several, or with `all` every doc. Every doc is read before
-/// anything is printed, so a missing path fails with no partial output.
+/// Prints one doc, several, or with `all` every doc. Docs are read before
+/// anything is printed, so missing paths fail the entire command.
 ///
-/// One doc prints bare, and when stdout is not a terminal its blob OID goes to
-/// stderr for a later `rd edit --expect`. Several docs each get a
-/// `==> path <==` header, which carries the blob OID when stdout is not a
-/// terminal. `line_numbers` prefixes each line with its number and a tab, as
-/// `cat -n` does, and skips the terminal colorizer.
+/// - One doc: prints just the doc, and when stdout is not a terminal its blob
+///   OID goes to stderr for a later `rd edit --expect`.
+/// - Multiple docs: when more than one doc is requested, each get a path
+///   header, which carries the blob OID when stdout is not a terminal.
+/// - `line_numbers` prefixes each line with its number and a tab, as `cat -n`
+///   does, and skips the terminal colorizer.
 fn cat(store: &DocStore, paths: &[String], all: bool, line_numbers: bool) -> Result<()> {
     let paths: Vec<String> = if all {
         store
@@ -347,13 +348,15 @@ fn cat(store: &DocStore, paths: &[String], all: bool, line_numbers: bool) -> Res
     };
 
     let mut out = std::io::stdout().lock();
-    if let [(_, content, blob)] = docs.as_slice() {
+    if let [(path, content, blob)] = docs.as_slice() {
         if !all {
             // `write!`, not `writeln!`: docs end in their own newline.
             write!(out, "{}", render(content))?;
             if !terminal {
                 out.flush()?;
-                eprintln!("rd: blob {blob} (pass to rd edit --expect to reject a stale write)");
+                eprintln!(
+                    "rd: {path} blob {blob} (pass to rd edit --expect to reject a stale write)"
+                );
             }
             return Ok(());
         }
