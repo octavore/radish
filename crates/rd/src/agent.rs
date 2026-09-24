@@ -17,7 +17,12 @@ pub const HELP: &str = indoc! {"
       rd list -t            list, newest edited first
       rd list --json        JSON array of {path, blob, size, modified}
       rd cat <path>         print a doc's content
-      rd <path>             shorthand for 'rd cat <path>'
+      rd cat <a> <b> ...    several docs, each under a '==> path (blob ...) <=='
+                            header
+      rd cat --all          every doc, same headers; the fastest way to load
+                            all context in one call
+      rd cat -n <path>      number lines, for citing path:line
+      rd <path> ...         shorthand for 'rd cat <path> ...'
 
     A missing path fails with 'no such page' and suggests close matches.
     An empty store prints nothing on stdout.

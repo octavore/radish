@@ -45,8 +45,17 @@ enum Cmd {
         #[arg(long)]
         json: bool,
     },
-    /// Print a doc's content
-    Cat { path: String },
+    /// Print one or more docs; several get a '==> path <==' header each
+    Cat {
+        #[arg(required_unless_present = "all")]
+        paths: Vec<String>,
+        /// Print every doc
+        #[arg(long, conflicts_with = "paths")]
+        all: bool,
+        /// Number each line (turns off terminal colors)
+        #[arg(short = 'n', long = "line-numbers")]
+        line_numbers: bool,
+    },
     /// Edit a doc: $EDITOR if no file, '-' for stdin, or from a file
     Edit {
         #[arg(add = ArgValueCompleter::new(complete::doc_path))]
@@ -135,7 +144,11 @@ fn run() -> Result<()> {
     let result = match cli.command {
         None => list(&store, false, false),
         Some(Cmd::List { by_date, json }) => list(&store, by_date, json),
-        Some(Cmd::Cat { path }) => cat(&store, &path),
+        Some(Cmd::Cat {
+            paths,
+            all,
+            line_numbers,
+        }) => cat(&store, &paths, all, line_numbers),
         Some(Cmd::Edit { path, file, expect }) => {
             edit(&store, &path, file.as_deref(), expect.as_deref())
         },
@@ -162,11 +175,10 @@ fn run() -> Result<()> {
         Some(Cmd::Export { dir }) => export(&store, dir),
         Some(Cmd::Open { path }) => open_page(&store, &root, &path),
         Some(Cmd::Shorthand(args)) => {
-            let path = &args[0];
-            if path == "." {
+            if args == ["."] {
                 open::repo(&root)
             } else {
-                cat(&store, path)
+                cat(&store, &args, false, false)
             }
         },
         Some(Cmd::Agent | Cmd::Install) => unreachable!("handled above"),
@@ -263,20 +275,84 @@ fn list_json(store: &DocStore, by_date: bool) -> Result<()> {
     Ok(())
 }
 
-/// Prints a page. When stdout is not a terminal, the page's blob OID also goes
-/// to stderr, for a later `rd edit --expect` to guard against.
-fn cat(store: &DocStore, path: &str) -> Result<()> {
-    let (content, blob) = store.read_with_blob(path)?;
-    // `print!`, not `println!`: pages end in their own newline, and the tty
-    // branch shouldn't add a blank line the piped branch doesn't.
-    if std::io::stdout().is_terminal() {
-        print!("{}", markdown::colorize(&content));
+/// Prints one doc, several, or with `all` every doc. Every doc is read before
+/// anything is printed, so a missing path fails with no partial output.
+///
+/// One doc prints bare, and when stdout is not a terminal its blob OID goes to
+/// stderr for a later `rd edit --expect`. Several docs each get a
+/// `==> path <==` header, which carries the blob OID when stdout is not a
+/// terminal. `line_numbers` prefixes each line with its number and a tab, as
+/// `cat -n` does, and skips the terminal colorizer.
+fn cat(store: &DocStore, paths: &[String], all: bool, line_numbers: bool) -> Result<()> {
+    let paths: Vec<String> = if all {
+        store
+            .list_pages()?
+            .into_iter()
+            .map(|page| page.path)
+            .collect()
     } else {
-        print!("{content}");
-        std::io::stdout().flush()?;
-        eprintln!("rd: blob {blob} (pass to rd edit --expect to reject a stale write)");
+        paths.to_vec()
+    };
+    if paths.is_empty() {
+        eprintln!("rd: no docs yet");
+        return Ok(());
+    }
+    let docs: Vec<(String, String, String)> = paths
+        .into_iter()
+        .map(|path| {
+            let (content, blob) = store.read_with_blob(&path)?;
+            Ok((path, content, blob))
+        })
+        .collect::<Result<_>>()?;
+
+    let terminal = std::io::stdout().is_terminal();
+    let render = |content: &str| {
+        if line_numbers {
+            number_lines(content)
+        } else if terminal {
+            markdown::colorize(content)
+        } else {
+            content.to_string()
+        }
+    };
+
+    let mut out = std::io::stdout().lock();
+    if let [(_, content, blob)] = docs.as_slice() {
+        if !all {
+            // `write!`, not `writeln!`: docs end in their own newline.
+            write!(out, "{}", render(content))?;
+            if !terminal {
+                out.flush()?;
+                eprintln!("rd: blob {blob} (pass to rd edit --expect to reject a stale write)");
+            }
+            return Ok(());
+        }
+    }
+    for (index, (path, content, blob)) in docs.iter().enumerate() {
+        if index > 0 {
+            writeln!(out)?;
+        }
+        if terminal {
+            let header = format!("==> {path} <==");
+            writeln!(out, "{}", cformat!("<bold>{header}</>"))?;
+        } else {
+            writeln!(out, "==> {path} (blob {blob}) <==")?;
+        }
+        let body = render(content);
+        write!(out, "{body}")?;
+        if !body.is_empty() && !body.ends_with('\n') {
+            writeln!(out)?;
+        }
     }
     Ok(())
+}
+
+fn number_lines(content: &str) -> String {
+    content
+        .lines()
+        .enumerate()
+        .map(|(index, line)| format!("{:>6}\t{line}\n", index + 1))
+        .collect()
 }
 
 /// Writes a page from `file`, from stdin when `file` is `-`, or by opening
