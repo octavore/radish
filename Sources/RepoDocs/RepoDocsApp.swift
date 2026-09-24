@@ -57,6 +57,21 @@ enum AppWindows {
   @MainActor static var openRepos: OpenRepos { .shared }
 }
 
+/// `NavigationSplitView` autosaves its split view frames by window index, so a
+/// new window can take another window's sidebar width and ignore the column's
+/// limits. `ContentView.sidebarWidth` owns that width, so the autosave is off.
+@MainActor
+enum SplitViewAutosave {
+  static func disable(in window: NSWindow) {
+    if let root = window.contentView { clearNames(in: root) }
+  }
+
+  private static func clearNames(in view: NSView) {
+    if let split = view as? NSSplitView { split.autosaveName = nil }
+    for subview in view.subviews { clearNames(in: subview) }
+  }
+}
+
 /// Hands back the `NSWindow` hosting a SwiftUI view once it joins the window.
 private struct WindowAccessor: NSViewRepresentable {
   var onChange: (NSWindow?) -> Void
@@ -177,6 +192,7 @@ struct RootView: View {
         // state still restore through `AppModel` and `@AppStorage`; only
         // window position and size are lost across quits.
         new?.isRestorable = false
+        if let new { SplitViewAutosave.disable(in: new) }
         syncRegistration()
       }
       .onChange(of: model.repo) { old, _ in

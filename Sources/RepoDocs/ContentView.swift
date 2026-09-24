@@ -43,6 +43,8 @@ struct ContentView: View {
   /// and as the distance the bar slides up by when hiding.
   private static let toolbarHeight: CGFloat = 48
 
+  private static let sidebarWidthRange: ClosedRange<CGFloat> = 180...320
+
   /// Shared by the sidebar toggle and the doc bar's leading inset so the two
   /// move as one. Sidebar shows/hides are a size change rather than a spring
   /// gesture, so an ease-out reads better than a bouncy default.
@@ -115,15 +117,19 @@ struct ContentView: View {
           description: Text("Create one to get started."))
       }
     }
-    .navigationSplitViewColumnWidth(min: 180, ideal: sidebarWidth, max: 320)
+    .navigationSplitViewColumnWidth(
+      min: Self.sidebarWidthRange.lowerBound, ideal: sidebarWidth,
+      max: Self.sidebarWidthRange.upperBound)
     // NavigationSplitView adds its own toggle at the sidebar's top edge, which
     // duplicates `docToolbar`'s. The floating bar owns that job.
     .toolbar(removing: .sidebarToggle)
     .safeAreaInset(edge: .bottom, spacing: 0) { sidebarFooter }
-    // Tracks the user's manual resizes into `sidebarWidth`. Without this the
-    // sidebar snaps back to the stored width on every relaunch.
+    // Stores the user's manual resizes in `sidebarWidth`, clamped to the
+    // column's range. Widths seen while the sidebar is collapsed are skipped.
     .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { newWidth in
-      sidebarWidth = newWidth
+      guard columnVisibility != .detailOnly else { return }
+      let range = Self.sidebarWidthRange
+      sidebarWidth = min(max(newWidth, range.lowerBound), range.upperBound)
     }
   }
 
