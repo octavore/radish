@@ -91,4 +91,14 @@ pub const HELP: &str = indoc! {"
     `rd edit` both creates and updates; there is no separate 'new' command.
     Writes that change nothing print 'unchanged <path>' and do not create a
     new commit.
+
+    Exit status:
+      0   success
+      1   any error: missing doc, no unique match for replace, destination
+          exists, `fmt --check` found unformatted docs, git failure
+      2   bad command-line usage
+      3   stale write: the doc changed after you read it (`--expect`, or the
+          guard in `replace`); re-read, reapply, retry
+    `rd grep` follows grep instead: 0 on a match, 1 on none, 2 on an error.
+    Errors go to stderr as one line starting 'rd: '.
 "};

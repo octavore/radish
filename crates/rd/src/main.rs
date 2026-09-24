@@ -143,7 +143,17 @@ fn main() {
     if let Err(error) = run() {
         // `{error:#}` prints the anyhow context chain on one line.
         ceprintln!("<red>rd:</> {error:#}");
-        std::process::exit(1);
+        std::process::exit(exit_code(&error));
+    }
+}
+
+/// 3 when a write was rejected because the doc changed after it was read, so
+/// a caller can re-read and retry without parsing the message; 1 for any other
+/// error. Usage errors exit 2 from clap before `run` returns.
+fn exit_code(error: &anyhow::Error) -> i32 {
+    match error.downcast_ref::<StoreError>() {
+        Some(StoreError::Stale { .. }) => 3,
+        _ => 1,
     }
 }
 
