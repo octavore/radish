@@ -355,6 +355,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "049a7a91b2cc8db5562fa646b8657e67ade4bde79ae86514db4a36ef26f280d2"
 dependencies = [
+ "anstream",
  "clml-proc-macro",
 ]
 
