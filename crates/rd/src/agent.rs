@@ -33,6 +33,8 @@ pub const HELP: &str = indoc! {"
       rd grep -l <regex>            only the paths of docs that match
       rd grep -F -i 'some text'     literal, case-insensitive
       rd grep -C 2 <regex>          two lines of context around each match
+      rd grep -e <a> -e <b> [path]  lines matching either; with -e, every
+                                    positional argument is a path
     Also: -S smart case, -w whole word, -v invert, -L paths without a
     match, -c count per doc, -o only the matched text, -N no line numbers,
     -m NUM max matches per doc, -A/-B NUM context after/before. Exit status

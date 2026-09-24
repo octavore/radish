@@ -43,7 +43,7 @@ pub fn fuzzy_match(query: String, paths: Vec<String>, limit: u32) -> Vec<FuzzyMa
         })
         .collect();
     // Stable, so equal scores keep the caller's order.
-    matches.sort_by(|a, b| b.score.cmp(&a.score));
+    matches.sort_by_key(|found| std::cmp::Reverse(found.score));
     matches.truncate(limit as usize);
     matches
 }

@@ -12,11 +12,17 @@ use regex::{Regex, RegexBuilder};
 
 #[derive(Args)]
 pub struct GrepArgs {
-    /// The regex to search for (a literal string with -F)
-    pattern: String,
+    /// The regex to search for (a literal string with -F). With -e, this is
+    /// read as a path instead.
+    #[arg(required_unless_present = "regexp")]
+    pattern: Option<String>,
     /// Only search docs at these paths or under these folders
     #[arg(add = ArgValueCompleter::new(crate::complete::doc_path))]
     paths: Vec<String>,
+    /// A pattern to search for. Repeatable; a line matches if any pattern
+    /// matches. Also searches for a pattern that starts with a dash
+    #[arg(short = 'e', long, value_name = "PATTERN", allow_hyphen_values = true)]
+    regexp: Vec<String>,
     /// Match case-insensitively
     #[arg(short = 'i', long)]
     ignore_case: bool,
@@ -64,12 +70,31 @@ pub struct GrepArgs {
     context: Option<usize>,
 }
 
+impl GrepArgs {
+    /// The patterns to search for and the doc paths to search in. As in
+    /// ripgrep, when any -e is given every positional argument is a path.
+    fn patterns_and_scopes(&self) -> (Vec<&str>, Vec<&str>) {
+        let positional = self.pattern.iter().chain(&self.paths).map(String::as_str);
+        if self.regexp.is_empty() {
+            let mut positional = positional;
+            let pattern = positional.next().into_iter().collect();
+            (pattern, positional.collect())
+        } else {
+            (
+                self.regexp.iter().map(String::as_str).collect(),
+                positional.collect(),
+            )
+        }
+    }
+}
+
 /// Runs the search and returns whether any doc matched, so the caller can
 /// exit 1 on no match, as grep does.
 pub fn run(store: &DocStore, args: &GrepArgs) -> Result<bool> {
-    let regex = build_regex(args)?;
+    let (patterns, scopes) = args.patterns_and_scopes();
+    let regex = build_regex(args, &patterns)?;
     let mut out = BufWriter::new(std::io::stdout().lock());
-    match search(store, args, &regex, &mut out) {
+    match search(store, args, &scopes, &regex, &mut out) {
         // A closed pipe (`rd grep x | head`) is a normal way to stop.
         Err(error)
             if error
@@ -85,23 +110,47 @@ pub fn run(store: &DocStore, args: &GrepArgs) -> Result<bool> {
     }
 }
 
-fn build_regex(args: &GrepArgs) -> Result<Regex> {
-    let mut pattern = if args.fixed_strings {
-        regex::escape(&args.pattern)
-    } else {
-        args.pattern.clone()
+/// Compiles `patterns` into one regex that matches wherever any of them does.
+/// Smart case turns case-sensitive when any pattern has an uppercase letter.
+fn build_regex(args: &GrepArgs, patterns: &[&str]) -> Result<Regex> {
+    let alternatives: Vec<String> = patterns
+        .iter()
+        .map(|pattern| {
+            if args.fixed_strings {
+                regex::escape(pattern)
+            } else {
+                pattern.to_string()
+            }
+        })
+        .collect();
+    let mut pattern = match alternatives.as_slice() {
+        [single] => single.clone(),
+        _ => alternatives
+            .iter()
+            .map(|alternative| format!("(?:{alternative})"))
+            .collect::<Vec<_>>()
+            .join("|"),
     };
     if args.word_regexp {
         pattern = format!(r"\b(?:{pattern})\b");
     }
-    let smart_insensitive = args.smart_case && !args.pattern.chars().any(char::is_uppercase);
+    let has_uppercase = patterns
+        .iter()
+        .any(|pattern| pattern.chars().any(char::is_uppercase));
+    let smart_insensitive = args.smart_case && !has_uppercase;
     RegexBuilder::new(&pattern)
         .case_insensitive(args.ignore_case || smart_insensitive)
         .build()
         .context("invalid pattern")
 }
 
-fn search(store: &DocStore, args: &GrepArgs, regex: &Regex, out: &mut impl Write) -> Result<bool> {
+fn search(
+    store: &DocStore,
+    args: &GrepArgs,
+    scopes: &[&str],
+    regex: &Regex,
+    out: &mut impl Write,
+) -> Result<bool> {
     let color = std::io::stdout().is_terminal();
     let before = args.before_context.or(args.context).unwrap_or(0);
     let after = args.after_context.or(args.context).unwrap_or(0);
@@ -111,7 +160,7 @@ fn search(store: &DocStore, args: &GrepArgs, regex: &Regex, out: &mut impl Write
         .list_pages()?
         .into_iter()
         .map(|page| page.path)
-        .filter(|path| in_scope(path, &args.paths))
+        .filter(|path| in_scope(path, scopes))
         .collect();
     pages.sort();
 
@@ -210,7 +259,7 @@ fn search(store: &DocStore, args: &GrepArgs, regex: &Regex, out: &mut impl Write
 
 /// A doc is in scope when no paths are given, or it equals a given path or
 /// sits under it as a folder.
-fn in_scope(path: &str, scopes: &[String]) -> bool {
+fn in_scope(path: &str, scopes: &[&str]) -> bool {
     scopes.is_empty()
         || scopes.iter().any(|scope| {
             let scope = scope.trim_end_matches('/');
@@ -247,4 +296,87 @@ fn highlight_line(regex: &Regex, line: &str) -> String {
     }
     result.push_str(&line[last..]);
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::*;
+
+    #[derive(Parser)]
+    struct Cli {
+        #[command(flatten)]
+        grep: GrepArgs,
+    }
+
+    fn parse(argv: &[&str]) -> GrepArgs {
+        Cli::try_parse_from(std::iter::once("grep").chain(argv.iter().copied()))
+            .unwrap()
+            .grep
+    }
+
+    fn regex(argv: &[&str]) -> Regex {
+        let args = parse(argv);
+        let (patterns, _) = args.patterns_and_scopes();
+        build_regex(&args, &patterns).unwrap()
+    }
+
+    #[test]
+    fn positional_pattern_then_paths() {
+        let args = parse(&["foo", "docs", "plans/a.md"]);
+        assert_eq!(
+            args.patterns_and_scopes(),
+            (vec!["foo"], vec!["docs", "plans/a.md"])
+        );
+    }
+
+    #[test]
+    fn with_regexp_every_positional_is_a_path() {
+        let args = parse(&["-e", "foo", "-e", "bar", "docs", "plans"]);
+        assert_eq!(
+            args.patterns_and_scopes(),
+            (vec!["foo", "bar"], vec!["docs", "plans"])
+        );
+    }
+
+    #[test]
+    fn a_pattern_is_required() {
+        assert!(Cli::try_parse_from(["grep"]).is_err());
+    }
+
+    #[test]
+    fn regexp_accepts_a_leading_dash() {
+        let args = parse(&["-e", "-foo"]);
+        assert_eq!(args.patterns_and_scopes().0, ["-foo"]);
+    }
+
+    #[test]
+    fn any_pattern_matches() {
+        let regex = regex(&["-e", "alpha", "-e", "beta"]);
+        assert!(regex.is_match("an alpha line"));
+        assert!(regex.is_match("a beta line"));
+        assert!(!regex.is_match("a gamma line"));
+    }
+
+    #[test]
+    fn fixed_strings_escape_each_pattern() {
+        let regex = regex(&["-F", "-e", "a.b", "-e", "(c)"]);
+        assert!(regex.is_match("a.b"));
+        assert!(!regex.is_match("axb"));
+        assert!(regex.is_match("(c)"));
+    }
+
+    #[test]
+    fn word_regexp_wraps_the_alternation() {
+        let regex = regex(&["-w", "-e", "cat", "-e", "dog"]);
+        assert!(regex.is_match("a dog here"));
+        assert!(!regex.is_match("catalog"));
+    }
+
+    #[test]
+    fn smart_case_turns_sensitive_on_any_uppercase() {
+        assert!(regex(&["-S", "-e", "foo", "-e", "bar"]).is_match("FOO"));
+        assert!(!regex(&["-S", "-e", "foo", "-e", "Bar"]).is_match("FOO"));
+    }
 }
