@@ -47,7 +47,10 @@ enum Cmd {
     },
     /// Print one or more docs; several get a '==> path <==' header each
     Cat {
-        #[arg(required_unless_present = "all")]
+        #[arg(
+            required_unless_present = "all",
+            add = ArgValueCompleter::new(complete::doc_path)
+        )]
         paths: Vec<String>,
         /// Print every doc
         #[arg(long, conflicts_with = "paths")]
@@ -90,7 +93,9 @@ enum Cmd {
     /// Move a doc, or every doc under a folder, in one commit
     #[command(alias = "rename")]
     Mv {
+        #[arg(add = ArgValueCompleter::new(complete::doc_path))]
         from: String,
+        #[arg(add = ArgValueCompleter::new(complete::doc_path))]
         to: String,
         /// Commit message (default: "docs: move <from> to <to>")
         #[arg(short = 'm', long)]
@@ -99,6 +104,7 @@ enum Cmd {
     /// Delete a doc
     #[command(alias = "delete")]
     Rm {
+        #[arg(add = ArgValueCompleter::new(complete::doc_path))]
         path: String,
         /// Commit message (default: "docs: delete <path>")
         #[arg(short = 'm', long)]
@@ -118,7 +124,10 @@ enum Cmd {
     /// Dump every doc to a directory (default: a fresh tmpdir)
     Export { dir: Option<PathBuf> },
     /// Open a doc, or '.' for the current repo, in the RepoDocs app
-    Open { path: String },
+    Open {
+        #[arg(add = ArgValueCompleter::new(complete::doc_path))]
+        path: String,
+    },
     /// Usage notes for AI agents editing docs via rd
     Agent,
     /// (Re)install this helper to ~/.local/bin/rd
