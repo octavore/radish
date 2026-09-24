@@ -13,6 +13,7 @@ rd-core = { path = "../rd-core" }
 
 anyhow.workspace = true
 clap.workspace = true
+clap_complete.workspace = true
 clml = { workspace = true, features = ["anstream"] }
 indoc.workspace = true
 regex.workspace = true

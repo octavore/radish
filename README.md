@@ -43,6 +43,18 @@ rd agent                 # usage notes for AI agents
 
 `rd` ships inside `RepoDocs.app/Contents/MacOS/`; RepoDocs ▸ Install 'rd' Command Line Tool symlinks it onto your PATH.
 
+### Shell completion
+
+`rd` completes subcommands and doc paths (for `cat`, `edit`, `rm`, `mv`, `grep`, and others). Add one line to your shell's rc file:
+
+```sh
+source <(COMPLETE=zsh rd)               # ~/.zshrc
+source <(COMPLETE=bash rd)              # ~/.bashrc
+COMPLETE=fish rd | source               # ~/.config/fish/config.fish
+```
+
+Doc paths come from the repo in the current directory, one folder level at a time.
+
 ## Where the docs are
 
 Two stores. The storage spec (`rd cat docs/STORAGE.md`) explains why they differ; the short version is that only one of them can safely be a real git note.

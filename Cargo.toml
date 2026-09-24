@@ -10,6 +10,7 @@ rust-version = "1.82"
 [workspace.dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
+clap_complete = { version = "4", features = ["unstable-dynamic"] }
 clml = "0"
 indoc = "2"
 regex = "1"

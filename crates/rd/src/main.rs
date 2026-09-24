@@ -4,6 +4,7 @@
 //! app links through UniFFI, so the CLI and the GUI stay in sync.
 
 mod agent;
+mod complete;
 mod grep;
 mod markdown;
 mod open;
@@ -14,7 +15,8 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{anyhow, bail, Context, Result};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::{ArgValueCompleter, CompleteEnv};
 use clml::{ceprintln, cformat};
 use rd_core::{DocStore, Git};
 
@@ -42,6 +44,7 @@ enum Cmd {
     Cat { path: String },
     /// Edit a doc: $EDITOR if no file, '-' for stdin, or from a file
     Edit {
+        #[arg(add = ArgValueCompleter::new(complete::doc_path))]
         path: String,
         /// A file to read the new content from, or '-' for stdin
         file: Option<String>,
@@ -52,6 +55,7 @@ enum Cmd {
     },
     /// Replace an exact string in a doc; it must occur once unless --all
     Replace {
+        #[arg(add = ArgValueCompleter::new(complete::doc_path))]
         path: String,
         /// The exact text to find
         old: String,
@@ -70,6 +74,7 @@ enum Cmd {
     /// Reformat a doc, or every doc, with rumdl
     Fmt {
         /// A doc to format; omit to format every doc
+        #[arg(add = ArgValueCompleter::new(complete::doc_path))]
         path: Option<String>,
         /// Report which docs would change without writing them
         #[arg(long)]
@@ -101,6 +106,9 @@ fn main() {
 }
 
 fn run() -> Result<()> {
+    // When a shell's completion hook sets COMPLETE, print candidates and exit.
+    CompleteEnv::with_factory(Cli::command).complete();
+
     let cli = Cli::parse();
 
     // These two need no repository, so they come before discovery.

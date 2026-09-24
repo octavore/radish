@@ -5,6 +5,7 @@ use std::io::{BufWriter, IsTerminal, Write};
 
 use anyhow::{Context, Result};
 use clap::Args;
+use clap_complete::ArgValueCompleter;
 use clml::cformat;
 use rd_core::DocStore;
 use regex::{Regex, RegexBuilder};
@@ -14,6 +15,7 @@ pub struct GrepArgs {
     /// The regex to search for (a literal string with -F)
     pattern: String,
     /// Only search docs at these paths or under these folders
+    #[arg(add = ArgValueCompleter::new(crate::complete::doc_path))]
     paths: Vec<String>,
     /// Match case-insensitively
     #[arg(short = 'i', long)]
