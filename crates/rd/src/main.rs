@@ -58,8 +58,10 @@ enum Cmd {
         #[arg(add = ArgValueCompleter::new(complete::doc_path))]
         path: String,
         /// The exact text to find
+        #[arg(allow_hyphen_values = true)]
         old: String,
         /// The text to put in its place
+        #[arg(allow_hyphen_values = true)]
         new: String,
         /// Replace every occurrence instead of requiring exactly one
         #[arg(long)]
