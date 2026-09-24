@@ -58,12 +58,14 @@ impl DocStore {
     /// Reads a page and its blob OID, both from one resolution of the ref tip,
     /// so the OID describes exactly the content returned. Pass the OID back to
     /// `write_expecting` to reject the write if the page changed in between.
+    /// Fails with `StoreError::NotFound` when there is no page at `path`,
+    /// including when `path` names a folder.
     pub fn read_with_blob(&self, path: &str) -> Result<(String, String)> {
-        let tip = self
+        let blob = self
             .git
             .resolve(PAGES_REF)
-            .unwrap_or_else(|| PAGES_REF.to_string());
-        let blob = self.git.text(&["rev-parse", &format!("{tip}:{path}")])?;
+            .and_then(|tip| self.blob_at(&tip, path))
+            .ok_or_else(|| StoreError::NotFound(path.to_string()))?;
         let bytes = self.git.run(&["cat-file", "-p", &blob])?;
         let content =
             String::from_utf8(bytes).map_err(|_| StoreError::NotUtf8(path.to_string()))?;
@@ -222,9 +224,21 @@ impl DocStore {
     }
 
     /// The blob OID at `path` in the tree of `commit`, or `None` when there is
-    /// no such path.
+    /// no such path or it names a folder.
     fn blob_at(&self, commit: &str, path: &str) -> Option<String> {
-        self.git.resolve(&format!("{commit}:{path}"))
+        // `--literal-pathspecs` so a path holding `*` or `?` is matched as
+        // written rather than as a glob.
+        let listing = self
+            .git
+            .run(&["--literal-pathspecs", "ls-tree", "-z", commit, "--", path])
+            .ok()?;
+        // One entry, `<mode> <type> <oid>\t<path>`, or nothing when absent.
+        let listing = String::from_utf8_lossy(&listing);
+        let (meta, found) = listing.trim_end_matches('\0').split_once('\t')?;
+        let mut fields = meta.split_whitespace();
+        let kind = fields.nth(1)?;
+        let oid = fields.next()?;
+        (kind == "blob" && found == path).then(|| oid.to_string())
     }
 
     /// Commits `tree` as a single-parent page edit on top of `old` and swaps
@@ -279,10 +293,8 @@ impl DocStore {
     }
 
     pub fn read(&self, path: String) -> Result<String> {
-        let bytes = self
-            .git
-            .run(&["cat-file", "-p", &format!("{PAGES_REF}:{path}")])?;
-        String::from_utf8(bytes).map_err(|_| StoreError::NotUtf8(path))
+        let (content, _) = self.read_with_blob(&path)?;
+        Ok(content)
     }
 
     /// Reformats `content` with rumdl and returns the result, without writing

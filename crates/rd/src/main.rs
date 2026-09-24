@@ -9,6 +9,7 @@ mod grep;
 mod markdown;
 mod open;
 mod relative;
+mod suggest;
 
 use std::io::{IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
@@ -18,7 +19,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{ArgValueCompleter, CompleteEnv};
 use clml::{ceprintln, cformat};
-use rd_core::{DocStore, Git};
+use rd_core::{DocStore, Git, StoreError};
 
 #[derive(Parser)]
 #[command(
@@ -127,7 +128,7 @@ fn run() -> Result<()> {
     let root = Git::discover(&cwd).ok_or_else(|| anyhow!("not inside a git repository"))?;
     let store = DocStore::open(&root);
 
-    match cli.command {
+    let result = match cli.command {
         None => list(&store, false),
         Some(Cmd::List { by_date }) => list(&store, by_date),
         Some(Cmd::Cat { path }) => cat(&store, &path),
@@ -165,7 +166,27 @@ fn run() -> Result<()> {
             }
         },
         Some(Cmd::Agent | Cmd::Install) => unreachable!("handled above"),
+    };
+    result.map_err(|error| with_suggestions(&store, error))
+}
+
+/// Adds "did you mean" candidates to a `StoreError::NotFound`, and passes any
+/// other error through unchanged.
+fn with_suggestions(store: &DocStore, error: anyhow::Error) -> anyhow::Error {
+    let Some(StoreError::NotFound(missing)) = error.downcast_ref::<StoreError>() else {
+        return error;
+    };
+    let paths: Vec<String> = store
+        .list_pages()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|page| page.path)
+        .collect();
+    let matches = suggest::close_matches(missing, &paths);
+    if matches.is_empty() {
+        return anyhow!("{error}; see 'rd list'");
     }
+    anyhow!("{error}; did you mean {}?", matches.join(", "))
 }
 
 fn list(store: &DocStore, by_date: bool) -> Result<()> {
@@ -264,7 +285,9 @@ fn edit_interactively(store: &DocStore, path: &str) -> Result<(String, Option<St
     let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vi".to_string());
     let (existing, opened) = match store.read_with_blob(path) {
         Ok((content, blob)) => (content, Some(blob)),
-        Err(_) => (String::new(), None),
+        // A new doc starts empty; any other failure is a real error.
+        Err(StoreError::NotFound(_)) => (String::new(), None),
+        Err(error) => return Err(error.into()),
     };
 
     let dir = tempfile::Builder::new().prefix("rd-edit-").tempdir()?;
@@ -301,7 +324,7 @@ fn format(store: &DocStore, path: Option<&str>, check: bool) -> Result<()> {
     let paths: Vec<String> = match path {
         Some(path) => {
             if !store.list_pages()?.iter().any(|page| page.path == path) {
-                bail!("no such page: {path}");
+                return Err(StoreError::NotFound(path.to_string()).into());
             }
             vec![path.to_string()]
         },
@@ -397,7 +420,7 @@ fn open_page(store: &DocStore, root: &Path, path: &str) -> Result<()> {
     }
     let pages = store.list_pages()?;
     if !pages.iter().any(|page| page.path == path) {
-        bail!("no such page: {path}");
+        return Err(StoreError::NotFound(path.to_string()).into());
     }
     open::repo(root)
 }

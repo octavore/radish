@@ -350,6 +350,32 @@ fn rename_refuses_missing_sources_and_taken_destinations() {
 }
 
 #[test]
+fn reading_a_missing_page_or_a_folder_is_not_found() {
+    let f = fixture();
+    let error = f.store.read("a.md".into()).unwrap_err();
+    assert!(matches!(error, StoreError::NotFound(_)));
+
+    f.store
+        .write("design/a.md".into(), "a\n".into(), None)
+        .unwrap();
+    let error = f.store.read("nope.md".into()).unwrap_err();
+    assert!(matches!(error, StoreError::NotFound(_)));
+    let error = f.store.read("design".into()).unwrap_err();
+    assert!(matches!(error, StoreError::NotFound(_)));
+}
+
+#[test]
+fn glob_characters_in_a_path_are_literal() {
+    let f = fixture();
+    f.store.write("a*.md".into(), "star\n".into(), None).unwrap();
+    f.store.write("ab.md".into(), "ab\n".into(), None).unwrap();
+
+    assert_eq!(f.store.read("a*.md".into()).unwrap(), "star\n");
+    let error = f.store.read("a?.md".into()).unwrap_err();
+    assert!(matches!(error, StoreError::NotFound(_)));
+}
+
+#[test]
 fn diverged_edits_merge_cleanly() {
     let f = fixture();
     f.store

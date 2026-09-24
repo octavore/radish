@@ -34,7 +34,7 @@ pub enum StoreError {
         actual: String,
     },
 
-    #[error("no such page or folder: {0}")]
+    #[error("no such page: {0}")]
     NotFound(String),
 
     #[error("{0} already exists")]

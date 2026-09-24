@@ -18,6 +18,8 @@ pub const HELP: &str = indoc! {"
       rd cat <path>         print a doc's content
       rd <path>             shorthand for 'rd cat <path>'
 
+    A missing path fails with 'no such page' and suggests close matches.
+
     Searching (grep-style flags; your own grep can't see docs):
       rd grep <regex>               print path:line:text for every match
       rd grep <regex> design        only docs under design/ (or one doc path)
