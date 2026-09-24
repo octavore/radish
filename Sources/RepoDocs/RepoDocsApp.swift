@@ -193,7 +193,21 @@ struct RootView: View {
       // requested repo's window; see `CLI.openRepo`.
       .onOpenURL { url in
         guard let path = Self.repoPath(from: url) else { return }
-        openWindow(value: URL(fileURLWithPath: path))
+        let target = URL(fileURLWithPath: path)
+        // A plain window with no repo yet (the default window on a cold
+        // launch, or an empty ⌘N window) is filled instead of opening a
+        // second one beside it, which would restore the last session's repo.
+        if repoURL == nil, model.repo == nil {
+          Task {
+            if await model.focusIfOpenElsewhere(target) {
+              dismiss()
+            } else {
+              await model.open(target)
+            }
+          }
+          return
+        }
+        openWindow(value: target)
       }
   }
 

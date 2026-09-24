@@ -38,6 +38,7 @@ final class AppModel {
   }
 
   private var store: DocStore?
+  private var openGeneration = 0
   private static let repoKey = "repoURL"
 
   /// Reopens the repository from the last session. Kept out of `init` on
@@ -52,8 +53,11 @@ final class AppModel {
     // Leave this one on the empty state rather than opening a duplicate.
     guard !AppWindows.openRepos.contains(saved) else { return }
     let url = URL(fileURLWithPath: saved)
+    let generation = openGeneration
     let isRepo = (try? await run { isRepository(path: url.path) }) ?? false
-    guard isRepo else { return }
+    // An `open` that started while the check ran (an `rd open` URL that
+    // arrived in this window) wins over the saved repo.
+    guard isRepo, openGeneration == generation else { return }
     await open(url)
   }
 
@@ -110,14 +114,21 @@ final class AppModel {
   /// shells out to git, so it runs off the main actor; everything after it is
   /// main-actor state assignment.
   func open(_ url: URL) async {
+    // Only the most recent call may apply its result. A last-session restore
+    // and an `rd open` URL can overlap in one window, and mixing their state
+    // would pair one repo's pages with the other's store.
+    openGeneration += 1
+    let generation = openGeneration
     let root = await repoRoot(for: url) ?? url
+    guard generation == openGeneration else { return }
     let opened: DocStore
     do {
       opened = try await run { try DocStore(root: root.path) }
     } catch {
-      errorMessage = errorText(error)
+      if generation == openGeneration { errorMessage = errorText(error) }
       return
     }
+    guard generation == openGeneration else { return }
 
     // Clear the outgoing repo's state before the new one loads, so a stale page
     // can't linger in the editor while the new tree is read.
@@ -139,6 +150,8 @@ final class AppModel {
     guard let store else { return }
     do {
       let found = try await run { try store.listPages() }
+      // A newer `open` may have swapped the store while this listing ran.
+      guard store === self.store else { return }
       pages = found
       tree = buildTree(pages: found, pendingFolders: Array(pendingFolders))
       if let selection, !found.contains(where: { $0.id == selection }) {
@@ -147,6 +160,7 @@ final class AppModel {
       if selection == nil, let first = found.first { selection = first.id }
       status = found.isEmpty ? "No pages yet" : "\(found.count) page(s)"
     } catch {
+      guard store === self.store else { return }
       errorMessage = errorText(error)
     }
   }
