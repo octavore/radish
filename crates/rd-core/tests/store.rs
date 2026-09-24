@@ -264,18 +264,29 @@ fn replace_requires_a_unique_match_unless_all() {
         .write("a.md".into(), "one two\ntwo three\n".into(), None)
         .unwrap();
 
-    let error = f.store.replace("a.md", "two", "2", false).unwrap_err();
+    let error = f
+        .store
+        .replace("a.md", "two", "2", false, None)
+        .unwrap_err();
     assert!(matches!(error, StoreError::Replace { .. }));
-    let error = f.store.replace("a.md", "four", "4", false).unwrap_err();
+    let error = f
+        .store
+        .replace("a.md", "four", "4", false, None)
+        .unwrap_err();
     assert!(matches!(error, StoreError::Replace { .. }));
-    let error = f.store.replace("a.md", "", "x", true).unwrap_err();
+    let error = f.store.replace("a.md", "", "x", true, None).unwrap_err();
     assert!(matches!(error, StoreError::Replace { .. }));
     assert_eq!(f.store.read("a.md".into()).unwrap(), "one two\ntwo three\n");
 
-    assert_eq!(f.store.replace("a.md", "one two", "1 2", false).unwrap(), 1);
+    assert_eq!(
+        f.store
+            .replace("a.md", "one two", "1 2", false, None)
+            .unwrap(),
+        1
+    );
     assert_eq!(f.store.read("a.md".into()).unwrap(), "1 2\ntwo three\n");
 
-    assert_eq!(f.store.replace("a.md", "t", "T", true).unwrap(), 2);
+    assert_eq!(f.store.replace("a.md", "t", "T", true, None).unwrap(), 2);
     assert_eq!(f.store.read("a.md".into()).unwrap(), "1 2\nTwo Three\n");
 }
 
@@ -285,7 +296,7 @@ fn rename_moves_a_page_in_one_commit() {
     f.store.write("a.md".into(), "body\n".into(), None).unwrap();
     let tip = f.git.resolve(PAGES_REF).unwrap();
 
-    let moves = f.store.rename("a.md", "notes/b.md").unwrap();
+    let moves = f.store.rename("a.md", "notes/b.md", None).unwrap();
     assert_eq!(moves, [("a.md".to_string(), "notes/b.md".to_string())]);
 
     let paths: Vec<String> = f
@@ -317,7 +328,7 @@ fn rename_moves_a_folder() {
         .write("designs.md".into(), "not in the folder\n".into(), None)
         .unwrap();
 
-    f.store.rename("design/", "archive/design").unwrap();
+    f.store.rename("design/", "archive/design", None).unwrap();
 
     let paths: Vec<String> = f
         .store
@@ -342,9 +353,9 @@ fn rename_refuses_missing_sources_and_taken_destinations() {
     f.store.write("a.md".into(), "a\n".into(), None).unwrap();
     f.store.write("b.md".into(), "b\n".into(), None).unwrap();
 
-    let error = f.store.rename("nope.md", "c.md").unwrap_err();
+    let error = f.store.rename("nope.md", "c.md", None).unwrap_err();
     assert!(matches!(error, StoreError::NotFound(_)));
-    let error = f.store.rename("a.md", "b.md").unwrap_err();
+    let error = f.store.rename("a.md", "b.md", None).unwrap_err();
     assert!(matches!(error, StoreError::Exists(_)));
     assert_eq!(f.store.read("b.md".into()).unwrap(), "b\n");
 }
@@ -367,7 +378,9 @@ fn reading_a_missing_page_or_a_folder_is_not_found() {
 #[test]
 fn glob_characters_in_a_path_are_literal() {
     let f = fixture();
-    f.store.write("a*.md".into(), "star\n".into(), None).unwrap();
+    f.store
+        .write("a*.md".into(), "star\n".into(), None)
+        .unwrap();
     f.store.write("ab.md".into(), "ab\n".into(), None).unwrap();
 
     assert_eq!(f.store.read("a*.md".into()).unwrap(), "star\n");
@@ -389,6 +402,33 @@ fn list_entries_reports_blob_and_size() {
     assert_eq!(entries[0].size, 4);
     let (_, blob) = f.store.read_with_blob("a.md").unwrap();
     assert_eq!(entries[0].blob, blob);
+}
+
+#[test]
+fn custom_messages_replace_the_default_subject() {
+    let f = fixture();
+    let subject = |f: &Fixture| {
+        f.git
+            .text(&["log", "-1", "--format=%s", PAGES_REF])
+            .unwrap()
+    };
+
+    f.store
+        .write_expecting("a.md", "one\n", Some("why a".into()), None)
+        .unwrap();
+    assert_eq!(subject(&f), "why a");
+    f.store
+        .replace("a.md", "one", "two", false, Some("why replace".into()))
+        .unwrap();
+    assert_eq!(subject(&f), "why replace");
+    f.store
+        .rename("a.md", "b.md", Some("why move".into()))
+        .unwrap();
+    assert_eq!(subject(&f), "why move");
+    f.store
+        .delete_with_message("b.md", Some("why delete".into()))
+        .unwrap();
+    assert_eq!(subject(&f), "why delete");
 }
 
 #[test]

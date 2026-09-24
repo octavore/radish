@@ -85,6 +85,9 @@ pub const HELP: &str = indoc! {"
       rd fmt                reformat every doc
       rd fmt --check        list docs that need formatting, exit non-zero
 
+    `edit`, `replace`, `mv`, and `rm` take -m <message> to set the commit
+    message; say why you made the change.
+
     `rd edit` both creates and updates; there is no separate 'new' command.
     Writes that change nothing print 'unchanged <path>' and do not create a
     new commit.

@@ -61,9 +61,7 @@ impl DocStore {
         if self.git.resolve(PAGES_REF).is_none() {
             return Ok(Vec::new());
         }
-        let listing = self
-            .git
-            .run(&["ls-tree", "-r", "-l", "-z", PAGES_REF])?;
+        let listing = self.git.run(&["ls-tree", "-r", "-l", "-z", PAGES_REF])?;
         // Each entry is `<mode> <type> <oid> <size>\t<path>`.
         let mut entries: Vec<PageEntry> = String::from_utf8_lossy(&listing)
             .split('\0')
@@ -159,7 +157,14 @@ impl DocStore {
     /// the replacement was computed from, so a concurrent edit to the page
     /// fails with `StoreError::Stale` instead of being overwritten. Returns
     /// how many occurrences were replaced.
-    pub fn replace(&self, path: &str, old: &str, new: &str, all: bool) -> Result<usize> {
+    pub fn replace(
+        &self,
+        path: &str,
+        old: &str,
+        new: &str,
+        all: bool,
+        message: Option<String>,
+    ) -> Result<usize> {
         if old.is_empty() {
             return Err(StoreError::Replace {
                 path: path.to_string(),
@@ -184,7 +189,7 @@ impl DocStore {
         }
 
         let updated = content.replace(old, new);
-        self.write_expecting(path, &updated, None, Some(&blob))?;
+        self.write_expecting(path, &updated, message, Some(&blob))?;
         Ok(count)
     }
 
@@ -192,7 +197,12 @@ impl DocStore {
     /// commit. Fails with `StoreError::NotFound` when `from` is neither a page
     /// nor a folder, and with `StoreError::Exists` when any destination is
     /// already a page. Returns the `(from, to)` path of each moved page.
-    pub fn rename(&self, from: &str, to: &str) -> Result<Vec<(String, String)>> {
+    pub fn rename(
+        &self,
+        from: &str,
+        to: &str,
+        message: Option<String>,
+    ) -> Result<Vec<(String, String)>> {
         let from = from.trim_end_matches('/');
         let to = to.trim_end_matches('/');
         let old = self
@@ -246,9 +256,27 @@ impl DocStore {
             self.git.text_with(&["write-tree"], None, env)
         })?;
 
-        let message = format!("docs: move {from} to {to}");
+        let message = message.unwrap_or_else(|| format!("docs: move {from} to {to}"));
         self.swap_page_tree(&tree, Some(&old), &message)?;
         Ok(moves)
+    }
+
+    /// `delete` with a commit message in place of the default.
+    pub fn delete_with_message(&self, path: &str, message: Option<String>) -> Result<()> {
+        let Some(old) = self.git.resolve(PAGES_REF) else {
+            return Ok(());
+        };
+
+        let tree = self.git.with_temporary_index(|env| {
+            self.git.run_with(&["read-tree", &old], None, env)?;
+            self.git
+                .run_with(&["update-index", "--force-remove", path], None, env)?;
+            self.git.text_with(&["write-tree"], None, env)
+        })?;
+
+        let message = message.unwrap_or_else(|| format!("docs: delete {path}"));
+        self.swap_page_tree(&tree, Some(&old), &message)?;
+        Ok(())
     }
 
     /// The blob OID at `path` in the tree of `commit`, or `None` when there is
@@ -356,19 +384,7 @@ impl DocStore {
     }
 
     pub fn delete(&self, path: String) -> Result<()> {
-        let Some(old) = self.git.resolve(PAGES_REF) else {
-            return Ok(());
-        };
-
-        let tree = self.git.with_temporary_index(|env| {
-            self.git.run_with(&["read-tree", &old], None, env)?;
-            self.git
-                .run_with(&["update-index", "--force-remove", &path], None, env)?;
-            self.git.text_with(&["write-tree"], None, env)
-        })?;
-
-        self.swap_page_tree(&tree, Some(&old), &format!("docs: delete {path}"))?;
-        Ok(())
+        self.delete_with_message(&path, None)
     }
 
     pub fn info(&self, path: String) -> Result<PageInfo> {

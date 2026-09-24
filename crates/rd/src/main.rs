@@ -66,6 +66,9 @@ enum Cmd {
         /// it to stderr)
         #[arg(long, value_name = "OID")]
         expect: Option<String>,
+        /// Commit message (default: "docs: update <path>")
+        #[arg(short = 'm', long)]
+        message: Option<String>,
     },
     /// Replace an exact string in a doc; it must occur once unless --all
     Replace {
@@ -80,13 +83,27 @@ enum Cmd {
         /// Replace every occurrence instead of requiring exactly one
         #[arg(long)]
         all: bool,
+        /// Commit message (default: "docs: update <path>")
+        #[arg(short = 'm', long)]
+        message: Option<String>,
     },
     /// Move a doc, or every doc under a folder, in one commit
     #[command(alias = "rename")]
-    Mv { from: String, to: String },
+    Mv {
+        from: String,
+        to: String,
+        /// Commit message (default: "docs: move <from> to <to>")
+        #[arg(short = 'm', long)]
+        message: Option<String>,
+    },
     /// Delete a doc
     #[command(alias = "delete")]
-    Rm { path: String },
+    Rm {
+        path: String,
+        /// Commit message (default: "docs: delete <path>")
+        #[arg(short = 'm', long)]
+        message: Option<String>,
+    },
     /// Reformat a doc, or every doc, with rumdl
     Fmt {
         /// A doc to format; omit to format every doc
@@ -149,17 +166,21 @@ fn run() -> Result<()> {
             all,
             line_numbers,
         }) => cat(&store, &paths, all, line_numbers),
-        Some(Cmd::Edit { path, file, expect }) => {
-            edit(&store, &path, file.as_deref(), expect.as_deref())
-        },
+        Some(Cmd::Edit {
+            path,
+            file,
+            expect,
+            message,
+        }) => edit(&store, &path, file.as_deref(), expect.as_deref(), message),
         Some(Cmd::Replace {
             path,
             old,
             new,
             all,
-        }) => replace(&store, &path, &old, &new, all),
-        Some(Cmd::Mv { from, to }) => rename(&store, &from, &to),
-        Some(Cmd::Rm { path }) => remove(&store, &path),
+            message,
+        }) => replace(&store, &path, &old, &new, all, message),
+        Some(Cmd::Mv { from, to, message }) => rename(&store, &from, &to, message),
+        Some(Cmd::Rm { path, message }) => remove(&store, &path, message),
         Some(Cmd::Fmt { path, check }) => format(&store, path.as_deref(), check),
         Some(Cmd::Grep(args)) => {
             // Like grep: 0 on a match, 1 on no match, 2 on an error.
@@ -362,7 +383,13 @@ fn number_lines(content: &str) -> String {
 ///
 /// With `expect`, the write is rejected unless the page's blob OID still equals
 /// it. The `$EDITOR` path always guards against the OID it opened with.
-fn edit(store: &DocStore, path: &str, file: Option<&str>, expect: Option<&str>) -> Result<()> {
+fn edit(
+    store: &DocStore,
+    path: &str,
+    file: Option<&str>,
+    expect: Option<&str>,
+    message: Option<String>,
+) -> Result<()> {
     let (content, opened) = match file {
         Some("-") => {
             let mut buffer = String::new();
@@ -378,7 +405,7 @@ fn edit(store: &DocStore, path: &str, file: Option<&str>, expect: Option<&str>) 
         },
         None => edit_interactively(store, path)?,
     };
-    if store.write_expecting(path, &content, None, expect.or(opened.as_deref()))? {
+    if store.write_expecting(path, &content, message, expect.or(opened.as_deref()))? {
         println!("wrote {path}");
     } else {
         println!("unchanged {path}");
@@ -475,8 +502,15 @@ fn format(store: &DocStore, path: Option<&str>, check: bool) -> Result<()> {
     Ok(())
 }
 
-fn replace(store: &DocStore, path: &str, old: &str, new: &str, all: bool) -> Result<()> {
-    let count = store.replace(path, old, new, all)?;
+fn replace(
+    store: &DocStore,
+    path: &str,
+    old: &str,
+    new: &str,
+    all: bool,
+    message: Option<String>,
+) -> Result<()> {
+    let count = store.replace(path, old, new, all, message)?;
     let noun = if count == 1 {
         "occurrence"
     } else {
@@ -486,15 +520,15 @@ fn replace(store: &DocStore, path: &str, old: &str, new: &str, all: bool) -> Res
     Ok(())
 }
 
-fn rename(store: &DocStore, from: &str, to: &str) -> Result<()> {
-    for (source, dest) in store.rename(from, to)? {
+fn rename(store: &DocStore, from: &str, to: &str, message: Option<String>) -> Result<()> {
+    for (source, dest) in store.rename(from, to, message)? {
         println!("moved {source} -> {dest}");
     }
     Ok(())
 }
 
-fn remove(store: &DocStore, path: &str) -> Result<()> {
-    store.delete(path.to_string())?;
+fn remove(store: &DocStore, path: &str, message: Option<String>) -> Result<()> {
+    store.delete_with_message(path, message)?;
     println!("deleted {path}");
     Ok(())
 }
