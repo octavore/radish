@@ -75,19 +75,20 @@ impl DocStore {
     /// check reads the same ref tip the compare-and-swap later guards, so a
     /// change landing between the check and the swap is rejected too. Changes
     /// to other pages do not count.
+    ///
+    /// Returns `false`, having committed nothing, when the content is already
+    /// what the page holds.
     pub fn write_expecting(
         &self,
         path: &str,
         content: &str,
         message: Option<String>,
         expected_blob: Option<&str>,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let old = self.git.resolve(PAGES_REF);
 
         if let Some(expected) = expected_blob {
-            let actual = old
-                .as_ref()
-                .and_then(|old| self.git.resolve(&format!("{old}:{path}")));
+            let actual = old.as_deref().and_then(|old| self.blob_at(old, path));
             if actual.as_deref() != Some(expected) {
                 return Err(StoreError::Stale {
                     path: path.to_string(),
@@ -120,8 +121,127 @@ impl DocStore {
         })?;
 
         let message = message.unwrap_or_else(|| format!("docs: update {path}"));
-        let message = self.stamp_repo_commit(&message);
-        self.commit_and_swap(&tree, old.as_slice(), &message, old.as_deref())
+        self.swap_page_tree(&tree, old.as_deref(), &message)
+    }
+
+    /// Replaces `old` with `new` in a page and writes it back. Unless `all` is
+    /// set, `old` must occur exactly once. The write is guarded by the blob
+    /// the replacement was computed from, so a concurrent edit to the page
+    /// fails with `StoreError::Stale` instead of being overwritten. Returns
+    /// how many occurrences were replaced.
+    pub fn replace(&self, path: &str, old: &str, new: &str, all: bool) -> Result<usize> {
+        if old.is_empty() {
+            return Err(StoreError::Replace {
+                path: path.to_string(),
+                reason: "the text to replace is empty".to_string(),
+            });
+        }
+        let (content, blob) = self.read_with_blob(path)?;
+        let count = content.matches(old).count();
+        let reason = match count {
+            0 => Some("the text to replace was not found".to_string()),
+            1 => None,
+            n if !all => Some(format!(
+                "the text to replace occurs {n} times; add more context or replace all"
+            )),
+            _ => None,
+        };
+        if let Some(reason) = reason {
+            return Err(StoreError::Replace {
+                path: path.to_string(),
+                reason,
+            });
+        }
+
+        let updated = content.replace(old, new);
+        self.write_expecting(path, &updated, None, Some(&blob))?;
+        Ok(count)
+    }
+
+    /// Moves a page, or every page under a folder, to a new path in one
+    /// commit. Fails with `StoreError::NotFound` when `from` is neither a page
+    /// nor a folder, and with `StoreError::Exists` when any destination is
+    /// already a page. Returns the `(from, to)` path of each moved page.
+    pub fn rename(&self, from: &str, to: &str) -> Result<Vec<(String, String)>> {
+        let from = from.trim_end_matches('/');
+        let to = to.trim_end_matches('/');
+        let old = self
+            .git
+            .resolve(PAGES_REF)
+            .ok_or_else(|| StoreError::NotFound(from.to_string()))?;
+        let pages: Vec<String> = self
+            .list_pages()?
+            .into_iter()
+            .map(|page| page.path)
+            .collect();
+
+        let moves: Vec<(String, String)> = if pages.iter().any(|page| page == from) {
+            vec![(from.to_string(), to.to_string())]
+        } else {
+            let prefix = format!("{from}/");
+            pages
+                .iter()
+                .filter_map(|page| {
+                    let rest = page.strip_prefix(&prefix)?;
+                    Some((page.clone(), format!("{to}/{rest}")))
+                })
+                .collect()
+        };
+        if moves.is_empty() {
+            return Err(StoreError::NotFound(from.to_string()));
+        }
+        if let Some((_, taken)) = moves.iter().find(|(_, dest)| pages.contains(dest)) {
+            return Err(StoreError::Exists(taken.clone()));
+        }
+
+        let tree = self.git.with_temporary_index(|env| {
+            self.git.run_with(&["read-tree", &old], None, env)?;
+            for (source, dest) in &moves {
+                let blob = self
+                    .blob_at(&old, source)
+                    .ok_or_else(|| StoreError::NotFound(source.clone()))?;
+                self.git
+                    .run_with(&["update-index", "--force-remove", source], None, env)?;
+                self.git.run_with(
+                    &[
+                        "update-index",
+                        "--add",
+                        "--cacheinfo",
+                        &format!("100644,{blob},{dest}"),
+                    ],
+                    None,
+                    env,
+                )?;
+            }
+            self.git.text_with(&["write-tree"], None, env)
+        })?;
+
+        let message = format!("docs: move {from} to {to}");
+        self.swap_page_tree(&tree, Some(&old), &message)?;
+        Ok(moves)
+    }
+
+    /// The blob OID at `path` in the tree of `commit`, or `None` when there is
+    /// no such path.
+    fn blob_at(&self, commit: &str, path: &str) -> Option<String> {
+        self.git.resolve(&format!("{commit}:{path}"))
+    }
+
+    /// Commits `tree` as a single-parent page edit on top of `old` and swaps
+    /// it in. Returns `false`, having committed nothing, when `tree` equals
+    /// `old`'s tree, so an unchanged write leaves no empty commit in history.
+    /// Merges go through `commit_and_swap` directly, since a merge must record
+    /// its second parent even when the tree is unchanged.
+    fn swap_page_tree(&self, tree: &str, old: Option<&str>, message: &str) -> Result<bool> {
+        if let Some(old) = old {
+            if self.git.resolve(&format!("{old}^{{tree}}")).as_deref() == Some(tree) {
+                return Ok(false);
+            }
+        }
+        let parents: Vec<String> = old.map(str::to_string).into_iter().collect();
+        let message = self.stamp_repo_commit(message);
+        self.commit_and_swap(tree, &parents, &message, old)?;
+        Ok(true)
     }
 }
 
@@ -191,7 +311,8 @@ impl DocStore {
     /// `<old>`, so a concurrent writer loses the race instead of silently
     /// clobbering us.
     pub fn write(&self, path: String, content: String, message: Option<String>) -> Result<()> {
-        self.write_expecting(&path, &content, message, None)
+        self.write_expecting(&path, &content, message, None)?;
+        Ok(())
     }
 
     pub fn delete(&self, path: String) -> Result<()> {
@@ -206,9 +327,8 @@ impl DocStore {
             self.git.text_with(&["write-tree"], None, env)
         })?;
 
-        let parents = [old.clone()];
-        let message = self.stamp_repo_commit(&format!("docs: delete {path}"));
-        self.commit_and_swap(&tree, &parents, &message, Some(&old))
+        self.swap_page_tree(&tree, Some(&old), &format!("docs: delete {path}"))?;
+        Ok(())
     }
 
     pub fn info(&self, path: String) -> Result<PageInfo> {

@@ -57,7 +57,18 @@ pub const HELP: &str = indoc! {"
       Sessions are stateless.
       EOF
 
-    Deleting:
+    Small edits, no round-trip (prefer this for changing a few lines):
+      rd replace <path> <old> <new>        replace exact text; it must occur once
+      rd replace <path> <old> <new> --all  replace every occurrence
+    <old> is matched literally, newlines included, so quote multi-line text
+    with $'...' or a single-quoted string spanning lines. With no match or
+    more than one, nothing is written; add surrounding text to <old> to make
+    it unique. A concurrent edit to the doc makes the write fail rather than
+    overwrite it.
+
+    Moving and deleting:
+      rd mv <from> <to>     move a doc, or every doc under a folder, in one
+                            commit; fails if a destination already exists
       rd rm <path>
 
     Formatting:
@@ -66,4 +77,6 @@ pub const HELP: &str = indoc! {"
       rd fmt --check        list docs that need formatting, exit non-zero
 
     `rd edit` both creates and updates; there is no separate 'new' command.
+    Writes that change nothing print 'unchanged <path>' and do not create a
+    new commit.
 "};

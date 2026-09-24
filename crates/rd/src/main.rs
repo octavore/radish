@@ -50,6 +50,20 @@ enum Cmd {
         #[arg(long, value_name = "OID")]
         expect: Option<String>,
     },
+    /// Replace an exact string in a doc; it must occur once unless --all
+    Replace {
+        path: String,
+        /// The exact text to find
+        old: String,
+        /// The text to put in its place
+        new: String,
+        /// Replace every occurrence instead of requiring exactly one
+        #[arg(long)]
+        all: bool,
+    },
+    /// Move a doc, or every doc under a folder, in one commit
+    #[command(alias = "rename")]
+    Mv { from: String, to: String },
     /// Delete a doc
     #[command(alias = "delete")]
     Rm { path: String },
@@ -110,6 +124,13 @@ fn run() -> Result<()> {
         Some(Cmd::Edit { path, file, expect }) => {
             edit(&store, &path, file.as_deref(), expect.as_deref())
         },
+        Some(Cmd::Replace {
+            path,
+            old,
+            new,
+            all,
+        }) => replace(&store, &path, &old, &new, all),
+        Some(Cmd::Mv { from, to }) => rename(&store, &from, &to),
         Some(Cmd::Rm { path }) => remove(&store, &path),
         Some(Cmd::Fmt { path, check }) => format(&store, path.as_deref(), check),
         Some(Cmd::Grep(args)) => {
@@ -213,8 +234,11 @@ fn edit(store: &DocStore, path: &str, file: Option<&str>, expect: Option<&str>) 
         },
         None => edit_interactively(store, path)?,
     };
-    store.write_expecting(path, &content, None, expect.or(opened.as_deref()))?;
-    println!("wrote {path}");
+    if store.write_expecting(path, &content, None, expect.or(opened.as_deref()))? {
+        println!("wrote {path}");
+    } else {
+        println!("unchanged {path}");
+    }
     Ok(())
 }
 
@@ -301,6 +325,24 @@ fn format(store: &DocStore, path: Option<&str>, check: bool) -> Result<()> {
         (0, _) => println!("already formatted"),
         (n, true) => bail!("{n} doc(s) need formatting"),
         _ => {},
+    }
+    Ok(())
+}
+
+fn replace(store: &DocStore, path: &str, old: &str, new: &str, all: bool) -> Result<()> {
+    let count = store.replace(path, old, new, all)?;
+    let noun = if count == 1 {
+        "occurrence"
+    } else {
+        "occurrences"
+    };
+    println!("replaced {count} {noun} in {path}");
+    Ok(())
+}
+
+fn rename(store: &DocStore, from: &str, to: &str) -> Result<()> {
+    for (source, dest) in store.rename(from, to)? {
+        println!("moved {source} -> {dest}");
     }
     Ok(())
 }

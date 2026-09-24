@@ -33,6 +33,15 @@ pub enum StoreError {
         expected: String,
         actual: String,
     },
+
+    #[error("no such page or folder: {0}")]
+    NotFound(String),
+
+    #[error("{0} already exists")]
+    Exists(String),
+
+    #[error("can't replace in {path}: {reason}")]
+    Replace { path: String, reason: String },
 }
 
 impl StoreError {

@@ -242,6 +242,114 @@ fn expected_blob_rejects_a_deleted_page() {
 }
 
 #[test]
+fn unchanged_write_and_missing_delete_add_no_commit() {
+    let f = fixture();
+    f.store.write("a.md".into(), "one\n".into(), None).unwrap();
+    let tip = f.git.resolve(PAGES_REF).unwrap();
+
+    let changed = f
+        .store
+        .write_expecting("a.md", "one\n", None, None)
+        .unwrap();
+    assert!(!changed);
+    f.store.delete("missing.md".into()).unwrap();
+
+    assert_eq!(f.git.resolve(PAGES_REF).unwrap(), tip);
+}
+
+#[test]
+fn replace_requires_a_unique_match_unless_all() {
+    let f = fixture();
+    f.store
+        .write("a.md".into(), "one two\ntwo three\n".into(), None)
+        .unwrap();
+
+    let error = f.store.replace("a.md", "two", "2", false).unwrap_err();
+    assert!(matches!(error, StoreError::Replace { .. }));
+    let error = f.store.replace("a.md", "four", "4", false).unwrap_err();
+    assert!(matches!(error, StoreError::Replace { .. }));
+    let error = f.store.replace("a.md", "", "x", true).unwrap_err();
+    assert!(matches!(error, StoreError::Replace { .. }));
+    assert_eq!(f.store.read("a.md".into()).unwrap(), "one two\ntwo three\n");
+
+    assert_eq!(f.store.replace("a.md", "one two", "1 2", false).unwrap(), 1);
+    assert_eq!(f.store.read("a.md".into()).unwrap(), "1 2\ntwo three\n");
+
+    assert_eq!(f.store.replace("a.md", "t", "T", true).unwrap(), 2);
+    assert_eq!(f.store.read("a.md".into()).unwrap(), "1 2\nTwo Three\n");
+}
+
+#[test]
+fn rename_moves_a_page_in_one_commit() {
+    let f = fixture();
+    f.store.write("a.md".into(), "body\n".into(), None).unwrap();
+    let tip = f.git.resolve(PAGES_REF).unwrap();
+
+    let moves = f.store.rename("a.md", "notes/b.md").unwrap();
+    assert_eq!(moves, [("a.md".to_string(), "notes/b.md".to_string())]);
+
+    let paths: Vec<String> = f
+        .store
+        .list_pages()
+        .unwrap()
+        .into_iter()
+        .map(|page| page.path)
+        .collect();
+    assert_eq!(paths, ["notes/b.md"]);
+    assert_eq!(f.store.read("notes/b.md".into()).unwrap(), "body\n");
+    let parent = f
+        .git
+        .text(&["rev-parse", &format!("{PAGES_REF}^")])
+        .unwrap();
+    assert_eq!(parent, tip);
+}
+
+#[test]
+fn rename_moves_a_folder() {
+    let f = fixture();
+    f.store
+        .write("design/a.md".into(), "a\n".into(), None)
+        .unwrap();
+    f.store
+        .write("design/sub/b.md".into(), "b\n".into(), None)
+        .unwrap();
+    f.store
+        .write("designs.md".into(), "not in the folder\n".into(), None)
+        .unwrap();
+
+    f.store.rename("design/", "archive/design").unwrap();
+
+    let paths: Vec<String> = f
+        .store
+        .list_pages()
+        .unwrap()
+        .into_iter()
+        .map(|page| page.path)
+        .collect();
+    assert_eq!(
+        paths,
+        [
+            "archive/design/a.md",
+            "archive/design/sub/b.md",
+            "designs.md"
+        ]
+    );
+}
+
+#[test]
+fn rename_refuses_missing_sources_and_taken_destinations() {
+    let f = fixture();
+    f.store.write("a.md".into(), "a\n".into(), None).unwrap();
+    f.store.write("b.md".into(), "b\n".into(), None).unwrap();
+
+    let error = f.store.rename("nope.md", "c.md").unwrap_err();
+    assert!(matches!(error, StoreError::NotFound(_)));
+    let error = f.store.rename("a.md", "b.md").unwrap_err();
+    assert!(matches!(error, StoreError::Exists(_)));
+    assert_eq!(f.store.read("b.md".into()).unwrap(), "b\n");
+}
+
+#[test]
 fn diverged_edits_merge_cleanly() {
     let f = fixture();
     f.store
