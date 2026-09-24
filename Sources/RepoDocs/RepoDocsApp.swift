@@ -62,6 +62,7 @@ enum AppWindows {
 /// limits. `ContentView.sidebarWidth` owns that width, so the autosave is off.
 @MainActor
 enum SplitViewAutosave {
+  /// Clears the autosave name of every split view in `window`.
   static func disable(in window: NSWindow) {
     if let root = window.contentView { clearNames(in: root) }
   }
@@ -203,28 +204,27 @@ struct RootView: View {
         if let repo = model.repo { AppWindows.openRepos.unregister(repo.path) }
       }
       // `onOpenURL` is a `View` modifier, not a `Scene` one, so it's here
-      // rather than on the `WindowGroup` itself; it fires regardless of
-      // which window happens to be current, and just asks SwiftUI to
-      // open (or focus, since windows are keyed `for: URL.self`) the
-      // requested repo's window; see `CLI.openRepo`.
+      // rather than on the `WindowGroup` itself. It fires in whichever window
+      // receives the event; see `CLI.openRepo`.
       .onOpenURL { url in
         guard let path = Self.repoPath(from: url) else { return }
-        let target = URL(fileURLWithPath: path)
-        // A plain window with no repo yet (the default window on a cold
-        // launch, or an empty ⌘N window) is filled instead of opening a
-        // second one beside it, which would restore the last session's repo.
-        if repoURL == nil, model.repo == nil {
-          Task {
-            if await model.focusIfOpenElsewhere(target) {
-              dismiss()
-            } else {
-              await model.open(target)
-            }
+        Task {
+          let target = URL(fileURLWithPath: path)
+          let root = await model.repoRoot(for: target) ?? target
+          // Focus a window that already holds the repo. `openWindow(value:)`
+          // only dedupes against windows opened with the same value.
+          if AppWindows.openRepos.focus(root.path) { return }
+          // Fill an empty window (cold launch or ⌘N) rather than opening a
+          // second one, which would restore the last session's repo.
+          if repoURL == nil, model.repo == nil {
+            await model.open(root)
+          } else {
+            openWindow(value: root)
           }
-          return
         }
-        openWindow(value: target)
       }
+      // Delivers `repodocs://` URLs to an existing window instead of a new one.
+      .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
   }
 
   private func syncRegistration() {
