@@ -16,7 +16,12 @@ final class AppModel {
   /// Git identity of the selected page, shown in the inspector. Nil for a
   /// folder row, which is a path prefix rather than a stored object.
   private(set) var info: PageInfo?
+  /// Every page path, most recently modified first. The Go to Page palette
+  /// lists these for an empty query and passes them to `fuzzyMatch`, which
+  /// keeps this order between equal scores.
+  private(set) var recentPaths: [String] = []
   var showInspector = true
+  var showPalette = false
   var errorMessage: String?
 
   /// Set when the user asks to diff the current page against a past revision;
@@ -135,6 +140,8 @@ final class AppModel {
     selection = nil
     pages = []
     tree = []
+    recentPaths = []
+    showPalette = false
     pendingFolders = []
     info = nil
     text = ""
@@ -149,10 +156,16 @@ final class AppModel {
   func refresh() async {
     guard let store else { return }
     do {
-      let found = try await run { try store.listPages() }
+      let (found, modified) = try await run {
+        (try store.listPages(), try store.lastModifiedTimes())
+      }
       // A newer `open` may have swapped the store while this listing ran.
       guard store === self.store else { return }
       pages = found
+      recentPaths = found.map(\.path).sorted {
+        let (a, b) = (modified[$0] ?? .distantPast, modified[$1] ?? .distantPast)
+        return a != b ? a > b : $0 < $1
+      }
       tree = buildTree(pages: found, pendingFolders: Array(pendingFolders))
       if let selection, !found.contains(where: { $0.id == selection }) {
         self.selection = nil
@@ -300,6 +313,13 @@ final class AppModel {
       return String(filePath.dropFirst(rootPath.count + 1))
     }
     return file.lastPathComponent
+  }
+
+  /// Opens `path` chosen in the Go to Page palette and closes the palette.
+  /// Like a sidebar click, this discards unsaved edits to the current page.
+  func openFromPalette(_ path: String) {
+    showPalette = false
+    selection = path
   }
 
   func deleteSelection() async {

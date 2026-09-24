@@ -120,6 +120,7 @@ struct RepoDocsApp: App {
       }
       CommandGroup(after: .newItem) {
         OpenRepositoryCommand()
+        GoToPageCommand()
       }
       FormatCommands()
     }
@@ -251,6 +252,17 @@ struct OpenRepositoryCommand: View {
     Button("Open Repository…") { model?.chooseRepo() }
       .keyboardShortcut("o")
       .disabled(model == nil)
+  }
+}
+
+/// File ▸ Go to Page. Toggles the focused window's fuzzy page palette.
+struct GoToPageCommand: View {
+  @FocusedValue(\.appModel) private var model
+
+  var body: some View {
+    Button("Go to Page…") { model?.showPalette.toggle() }
+      .keyboardShortcut("k")
+      .disabled(model?.repo == nil)
   }
 }
 

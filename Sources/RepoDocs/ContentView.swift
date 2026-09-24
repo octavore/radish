@@ -181,8 +181,22 @@ struct ContentView: View {
         docToolbar
           .transition(.move(edge: .top).combined(with: .opacity))
       }
+      if model.showPalette {
+        // A click anywhere outside the palette closes it.
+        Color.clear
+          .contentShape(Rectangle())
+          .onTapGesture { model.showPalette = false }
+        CommandPaletteView(
+          paths: model.recentPaths,
+          onOpen: model.openFromPalette,
+          onDismiss: { model.showPalette = false }
+        )
+        .padding(.top, Self.toolbarHeight + 24)
+        .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+      }
     }
     .animation(.easeOut(duration: 0.2), value: showToolbar)
+    .animation(.easeOut(duration: 0.12), value: model.showPalette)
     // A hidden title bar still reserves its safe area. Reclaim it so the bar
     // starts at the window's own top edge; the bar *is* this window's title
     // bar, and the document scrolls under it from there.

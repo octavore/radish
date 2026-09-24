@@ -73,6 +73,18 @@ pub struct PageDiff {
     pub text: String,
 }
 
+/// One result from `fuzzy_match`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FuzzyMatch {
+    pub path: String,
+    /// Higher is better. Only meaningful relative to other results for the
+    /// same query.
+    pub score: u32,
+    /// Offsets of the matched characters in `path`, counted in Unicode scalar
+    /// values (not bytes or grapheme clusters), ascending.
+    pub indices: Vec<u32>,
+}
+
 #[derive(Debug, Clone, Default, uniffi::Record)]
 pub struct Conflict {
     pub path: String,

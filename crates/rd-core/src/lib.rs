@@ -8,16 +8,18 @@
 
 pub mod error;
 pub mod fmt;
+pub mod fuzzy;
 pub mod git;
 pub mod store;
 pub mod tree;
 pub mod types;
 
 pub use error::{Result, StoreError};
+pub use fuzzy::fuzzy_match;
 pub use git::Git;
 pub use store::{pages_upstream, DocStore, DEFAULT_REMOTE, NOTES_REF, PAGES_REF};
 pub use tree::{build_tree, DocNode};
-pub use types::{Conflict, MergeResult, Page, PageDiff, PageEntry, PageInfo, Revision};
+pub use types::{Conflict, FuzzyMatch, MergeResult, Page, PageDiff, PageEntry, PageInfo, Revision};
 
 uniffi::setup_scaffolding!();
 
