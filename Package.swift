@@ -11,7 +11,7 @@ let package = Package(
     name: "RepoDocs",
     platforms: [.macOS(.v15)],
     dependencies: [
-        .package(url: "https://github.com/octavore/crumpet", from: "0.1.0"),
+        .package(url: "https://github.com/octavore/crumpet", branch: "main"),
     ],
     targets: [
         // The generated C header and modulemap for the Rust core. Both, and the

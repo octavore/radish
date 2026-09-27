@@ -3,20 +3,12 @@ import Crumpet
 import RepoDocsCore
 import SwiftUI
 
-extension EditorColorScheme {
-  /// RepoDocs' editor palette. Each accent is one of SwiftUI's system colors,
-  /// so it's already dynamic (adapts to light/dark) with no extra work.
-  static let repoDocs = EditorColorScheme(
-    heading: .indigo,
-    code: .pink,
-    bold: .orange,
-    italic: .teal)
-}
-
 struct ContentView: View {
   @Bindable var model: AppModel
   @State private var commands = EditorCommands()
-  @AppStorage(AppSettings.themeKey) private var themeString = ""
+  @AppStorage(AppSettings.themeKey) private var theme = EditorTheme.system
+  @AppStorage(AppSettings.appearanceKey) private var appearance = EditorAppearance.system
+  @AppStorage(AppSettings.customColorsKey) private var customColors = EditorCustomColors()
   @AppStorage(AppSettings.editorSettingsKey) private var editorSettings = AppSettings.defaultEditorSettings
   @State private var isNaming = false
   @State private var newPath = ""
@@ -210,7 +202,8 @@ struct ContentView: View {
         .commands(commands)
         .editorSettings(editorSettings)
         .editorSettingsChannel(AppSettings.editorChannel)
-        .editorColorScheme(AppSettings.colorScheme(from: themeString))
+        .editorTheme(theme, customColors: customColors)
+        .editorAppearance(appearance)
         .editorTopContentInset(Self.toolbarHeight)
         .onScroll(handleScroll)
         .focusedSceneValue(\.editorCommands, commands)
