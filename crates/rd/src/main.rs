@@ -33,6 +33,26 @@ struct Cli {
     command: Option<Cmd>,
 }
 
+#[derive(clap::Args)]
+struct SliceArgs {
+    #[arg(required = true, add = ArgValueCompleter::new(complete::doc_path))]
+    paths: Vec<String>,
+    /// Number of lines to print
+    #[arg(short = 'n', long = "lines", default_value_t = 10)]
+    lines: usize,
+    /// Number each line, counting from the doc's first line (turns off
+    /// terminal colors)
+    #[arg(long = "line-numbers")]
+    line_numbers: bool,
+}
+
+/// Which part of a doc `cat` prints.
+#[derive(Clone, Copy)]
+enum Slice {
+    Head(usize),
+    Tail(usize),
+}
+
 #[derive(Subcommand)]
 enum Cmd {
     /// List the docs in the current repo
@@ -59,6 +79,10 @@ enum Cmd {
         #[arg(short = 'n', long = "line-numbers")]
         line_numbers: bool,
     },
+    /// Print the first lines of one or more docs (default 10)
+    Head(SliceArgs),
+    /// Print the last lines of one or more docs (default 10)
+    Tail(SliceArgs),
     /// Edit a doc: $EDITOR if no file, '-' for stdin, or from a file
     Edit {
         #[arg(add = ArgValueCompleter::new(complete::doc_path))]
@@ -196,7 +220,21 @@ fn run() -> Result<()> {
             paths,
             all,
             line_numbers,
-        }) => cat(&store, &paths, all, line_numbers),
+        }) => cat(&store, &paths, all, line_numbers, None),
+        Some(Cmd::Head(args)) => cat(
+            &store,
+            &args.paths,
+            false,
+            args.line_numbers,
+            Some(Slice::Head(args.lines)),
+        ),
+        Some(Cmd::Tail(args)) => cat(
+            &store,
+            &args.paths,
+            false,
+            args.line_numbers,
+            Some(Slice::Tail(args.lines)),
+        ),
         Some(Cmd::Edit {
             path,
             file,
@@ -230,7 +268,7 @@ fn run() -> Result<()> {
             if args == ["."] {
                 open::repo(&root)
             } else {
-                cat(&store, &args, false, false)
+                cat(&store, &args, false, false, None)
             }
         },
         Some(Cmd::Agent { .. } | Cmd::Install) => unreachable!("handled above"),
@@ -335,8 +373,17 @@ fn list_json(store: &DocStore, by_date: bool) -> Result<()> {
 /// - Multiple docs: when more than one doc is requested, each get a path
 ///   header, which carries the blob OID when stdout is not a terminal.
 /// - `line_numbers` prefixes each line with its number and a tab, as `cat -n`
-///   does, and skips the terminal colorizer.
-fn cat(store: &DocStore, paths: &[String], all: bool, line_numbers: bool) -> Result<()> {
+///   does, and skips the terminal colorizer. Numbers count from the doc's first
+///   line, even when `slice` starts later.
+/// - `slice` limits each doc to its first or last lines, as `head` and `tail`
+///   do.
+fn cat(
+    store: &DocStore,
+    paths: &[String],
+    all: bool,
+    line_numbers: bool,
+    slice: Option<Slice>,
+) -> Result<()> {
     let paths: Vec<String> = if all {
         store
             .list_pages()?
@@ -350,18 +397,22 @@ fn cat(store: &DocStore, paths: &[String], all: bool, line_numbers: bool) -> Res
         eprintln!("rd: no docs yet");
         return Ok(());
     }
-    let docs: Vec<(String, String, String)> = paths
+    let docs: Vec<(String, String, String, usize)> = paths
         .into_iter()
         .map(|path| {
             let (content, blob) = store.read_with_blob(&path)?;
-            Ok((path, content, blob))
+            let (content, first) = match slice {
+                Some(slice) => take_lines(&content, slice),
+                None => (content, 1),
+            };
+            Ok((path, content, blob, first))
         })
         .collect::<Result<_>>()?;
 
     let terminal = std::io::stdout().is_terminal();
-    let render = |content: &str| {
+    let render = |content: &str, first: usize| {
         if line_numbers {
-            number_lines(content)
+            number_lines(content, first)
         } else if terminal {
             markdown::colorize(content)
         } else {
@@ -370,10 +421,10 @@ fn cat(store: &DocStore, paths: &[String], all: bool, line_numbers: bool) -> Res
     };
 
     let mut out = std::io::stdout().lock();
-    if let [(path, content, blob)] = docs.as_slice() {
+    if let [(path, content, blob, first)] = docs.as_slice() {
         if !all {
             // `write!`, not `writeln!`: docs end in their own newline.
-            write!(out, "{}", render(content))?;
+            write!(out, "{}", render(content, *first))?;
             if !terminal {
                 out.flush()?;
                 eprintln!(
@@ -383,7 +434,7 @@ fn cat(store: &DocStore, paths: &[String], all: bool, line_numbers: bool) -> Res
             return Ok(());
         }
     }
-    for (index, (path, content, blob)) in docs.iter().enumerate() {
+    for (index, (path, content, blob, first)) in docs.iter().enumerate() {
         if index > 0 {
             writeln!(out)?;
         }
@@ -393,7 +444,7 @@ fn cat(store: &DocStore, paths: &[String], all: bool, line_numbers: bool) -> Res
         } else {
             writeln!(out, "==> {path} (blob {blob}) <==")?;
         }
-        let body = render(content);
+        let body = render(content, *first);
         write!(out, "{body}")?;
         if !body.is_empty() && !body.ends_with('\n') {
             writeln!(out)?;
@@ -402,12 +453,22 @@ fn cat(store: &DocStore, paths: &[String], all: bool, line_numbers: bool) -> Res
     Ok(())
 }
 
-fn number_lines(content: &str) -> String {
+fn number_lines(content: &str, first: usize) -> String {
     content
         .lines()
         .enumerate()
-        .map(|(index, line)| format!("{:>6}\t{line}\n", index + 1))
+        .map(|(index, line)| format!("{:>6}\t{line}\n", first + index))
         .collect()
+}
+
+/// The lines selected by `slice`, and the 1-based number of the first one.
+fn take_lines(content: &str, slice: Slice) -> (String, usize) {
+    let lines: Vec<&str> = content.split_inclusive('\n').collect();
+    let (start, end) = match slice {
+        Slice::Head(count) => (0, count.min(lines.len())),
+        Slice::Tail(count) => (lines.len().saturating_sub(count), lines.len()),
+    };
+    (lines[start..end].concat(), start + 1)
 }
 
 /// Writes a page from `file`, from stdin when `file` is `-`, or by opening

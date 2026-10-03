@@ -22,6 +22,8 @@ pub const HELP: &str = indoc! {"
       rd cat --all          every doc, same headers; the fastest way to load
                             all context in one call
       rd cat -n <path>      number lines, for citing path:line
+      rd head [-n N] <path> ...  first N lines (default 10) of each doc
+      rd tail [-n N] <path> ...  last N lines (default 10) of each doc
       rd <path> ...         shorthand for 'rd cat <path> ...'
 
     A missing path fails with 'no such page' and suggests close matches.

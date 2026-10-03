@@ -27,11 +27,16 @@ pub fn doc_path(current: &OsStr) -> Vec<CompletionCandidate> {
 
     let mut candidates = BTreeSet::new();
     for page in pages {
-        let Some(rest) = page.path.strip_prefix(current) else {
+        // The prefix match ignores ASCII case. The candidate keeps the doc's
+        // own casing, so it replaces whatever the user typed.
+        let Some(typed) = page.path.get(..current.len()) else {
             continue;
         };
-        // Keep the typed prefix and extend it to the end of the next segment.
-        let end = match rest.find('/') {
+        if !typed.eq_ignore_ascii_case(current) {
+            continue;
+        }
+        // Extend the typed prefix to the end of the next segment.
+        let end = match page.path[current.len()..].find('/') {
             Some(slash) => current.len() + slash + 1,
             None => page.path.len(),
         };
