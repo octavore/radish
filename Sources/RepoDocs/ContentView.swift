@@ -42,6 +42,20 @@ struct ContentView: View {
   /// gesture, so an ease-out reads better than a bouncy default.
   private static let sidebarAnimation = Animation.easeOut(duration: 0.25)
 
+  /// Path of the selected sidebar row, without the folder ID prefix.
+  private var selectedPath: String? {
+    guard let id = model.selection else { return nil }
+    return id.hasPrefix("folder:") ? String(id.dropFirst("folder:".count)) : id
+  }
+
+  /// Selected row name. Falls back to the repo name, then the app name.
+  private var title: String {
+    if let path = selectedPath {
+      return (path as NSString).lastPathComponent
+    }
+    return model.repo?.lastPathComponent ?? "RepoDocs"
+  }
+
   var body: some View {
     NavigationSplitView(columnVisibility: $columnVisibility) {
       sidebar
@@ -50,7 +64,7 @@ struct ContentView: View {
     }
     // Still set even though `.hiddenTitleBar` draws no title: it names the
     // window in the Window menu and the ⌘-Tab window switcher.
-    .navigationTitle(model.repo?.lastPathComponent ?? "RepoDocs")
+    .navigationTitle(title)
     .navigationSubtitle(model.status)
     .inspector(isPresented: $model.showInspector) {
       InspectorView(info: model.info) { revision in
@@ -157,7 +171,15 @@ struct ContentView: View {
         systemImage: node.isFolder ? "folder" : "doc.text")
         .foregroundStyle(node.isFolder ? .secondary : .primary)
         .tag(node.id)
-        .contextMenu { newItemMenu(in: node.folderPrefix) }
+        .contextMenu {
+          newItemMenu(in: node.folderPrefix)
+          Divider()
+          Button("Copy Path") {
+            let path = node.page?.path ?? node.folderPrefix
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(path, forType: .string)
+          }
+        }
     }
   }
 
@@ -281,12 +303,13 @@ struct ContentView: View {
       }
       .help("Hide or show the sidebar")
       VStack(alignment: .leading, spacing: 0) {
-        Text(model.repo?.lastPathComponent ?? "RepoDocs")
+        Text(title)
           .font(.headline)
-        if !model.status.isEmpty {
-          Text(model.status)
+        if let path = selectedPath {
+          Text(path)
             .font(.caption)
             .foregroundStyle(.secondary)
+            .truncationMode(.head)
         }
       }
       .lineLimit(1)
