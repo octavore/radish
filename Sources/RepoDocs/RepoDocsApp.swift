@@ -147,6 +147,12 @@ struct RepoDocsApp: App {
         OpenRepositoryCommand()
         GoToPageCommand()
       }
+      CommandGroup(after: .toolbar) {
+        ReloadCommand()
+      }
+      CommandGroup(after: .textEditing) {
+        FindCommands()
+      }
       FormatCommands()
     }
     Settings {
@@ -302,6 +308,44 @@ struct GoToPageCommand: View {
     Button("Go to Page…") { model?.showPalette.toggle() }
       .keyboardShortcut("k")
       .disabled(model?.repo == nil)
+  }
+}
+
+/// View ▸ Reload Pages. Rereads the focused window's pages from git.
+struct ReloadCommand: View {
+  @FocusedValue(\.appModel) private var model
+
+  var body: some View {
+    Button("Reload Pages") { Task { await model?.reload() } }
+      .keyboardShortcut("r")
+      .disabled(model?.repo == nil)
+  }
+}
+
+/// Edit ▸ Find. SwiftUI omits this submenu, so each item sends
+/// `performTextFinderAction(_:)` up the responder chain to the focused text
+/// view, which reads the action from the sender's tag.
+struct FindCommands: View {
+  var body: some View {
+    Menu("Find") {
+      item("Find…", .showFindInterface, "f")
+      item("Find and Replace…", .showReplaceInterface, "f", [.command, .option])
+      item("Find Next", .nextMatch, "g")
+      item("Find Previous", .previousMatch, "g", [.command, .shift])
+      item("Use Selection for Find", .setSearchString, "e")
+    }
+  }
+
+  private func item(
+    _ title: String, _ action: NSTextFinder.Action, _ key: KeyEquivalent,
+    _ modifiers: EventModifiers = .command
+  ) -> some View {
+    Button(title) {
+      let sender = NSMenuItem()
+      sender.tag = action.rawValue
+      NSApp.sendAction(#selector(NSResponder.performTextFinderAction(_:)), to: nil, from: sender)
+    }
+    .keyboardShortcut(key, modifiers: modifiers)
   }
 }
 

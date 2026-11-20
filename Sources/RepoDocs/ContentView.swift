@@ -147,12 +147,11 @@ struct ContentView: View {
     if model.repo != nil {
       HStack {
         Button {
-          Task { await model.refresh() }
+          Task { await model.reload() }
         } label: {
           Label("Refresh", systemImage: "arrow.clockwise")
         }
         .buttonStyle(.borderless)
-        .keyboardShortcut("r")
         .help("Reload pages from git")
         Spacer()
       }

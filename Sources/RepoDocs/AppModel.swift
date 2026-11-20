@@ -188,6 +188,12 @@ final class AppModel {
     }
   }
 
+  /// Reread the page list and the selected page. Unsaved edits are kept.
+  func reload() async {
+    await refresh()
+    if !isDirty { await loadSelection() }
+  }
+
   func save() async {
     guard let store, let path = selection else { return }
     let content = text
