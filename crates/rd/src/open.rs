@@ -13,12 +13,18 @@ use anyhow::{anyhow, Context, Result};
 /// process. The URL is what opens the repo. The app persists it as the
 /// last-opened repo itself, so quitting and reopening from Finder resumes
 /// there; the CLI writes no preferences.
-pub fn repo(root: &Path) -> Result<()> {
+///
+/// A `page` is a doc path to select once the repo is open.
+pub fn repo(root: &Path, page: Option<&str>) -> Result<()> {
     let app = bundle().ok_or_else(|| anyhow!("can't find RepoDocs.app to launch"))?;
-    let url = format!(
+    let mut url = format!(
         "repodocs://open?path={}",
         percent_encode(&root.to_string_lossy())
     );
+    if let Some(page) = page {
+        url.push_str("&page=");
+        url.push_str(&percent_encode(page));
+    }
 
     // `-a <bundle>` targets this exact app bundle directly, rather than relying
     // on `repodocs://` already being registered with LaunchServices (which can

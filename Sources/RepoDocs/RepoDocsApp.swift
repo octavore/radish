@@ -12,20 +12,45 @@ final class OpenRepos {
     weak var value: NSWindow?
   }
 
+  private final class WeakModel {
+    weak var value: AppModel?
+  }
+
   private var windows: [String: WeakWindow] = [:]
+  private var models: [String: WeakModel] = [:]
+  private var pendingPages: [String: String] = [:]
 
   /// One instance for the app. `WindowGroup` and `Settings` are separate scenes
   /// with no shared state, and every window's `RootView` registers here.
   static let shared = OpenRepos()
 
-  func register(_ path: String, window: NSWindow) {
+  func register(_ path: String, window: NSWindow, model: AppModel) {
     let box = windows[path] ?? WeakWindow()
     box.value = window
     windows[path] = box
+    let modelBox = models[path] ?? WeakModel()
+    modelBox.value = model
+    models[path] = modelBox
   }
 
   func unregister(_ path: String) {
     windows[path] = nil
+    models[path] = nil
+  }
+
+  /// Select `page` in the window that holds `path`.
+  func select(page: String, in path: String) {
+    models[path]?.value?.selectPage(page)
+  }
+
+  /// Remember a page to select once a window finishes opening `path`.
+  func setPendingPage(_ page: String?, for path: String) {
+    pendingPages[path] = page
+  }
+
+  /// Take the page waiting for `path`, if any.
+  func takePendingPage(for path: String) -> String? {
+    pendingPages.removeValue(forKey: path)
   }
 
   func contains(_ path: String) -> Bool {
@@ -214,7 +239,12 @@ struct RootView: View {
           let root = await model.repoRoot(for: target) ?? target
           // Focus a window that already holds the repo. `openWindow(value:)`
           // only dedupes against windows opened with the same value.
-          if AppWindows.openRepos.focus(root.path) { return }
+          let page = Self.page(from: url)
+          if AppWindows.openRepos.focus(root.path) {
+            if let page { AppWindows.openRepos.select(page: page, in: root.path) }
+            return
+          }
+          AppWindows.openRepos.setPendingPage(page, for: root.path)
           // Fill an empty window (cold launch or ⌘N) rather than opening a
           // second one, which would restore the last session's repo.
           if repoURL == nil, model.repo == nil {
@@ -230,15 +260,24 @@ struct RootView: View {
 
   private func syncRegistration() {
     guard let window, let repo = model.repo else { return }
-    AppWindows.openRepos.register(repo.path, window: window)
+    AppWindows.openRepos.register(repo.path, window: window, model: model)
   }
 
   /// Parses `repodocs://open?path=<repo path>`, as sent by `rd open .`/`rd .`.
   private static func repoPath(from url: URL) -> String? {
     guard url.scheme == "repodocs", url.host == "open" else { return nil }
-    return URLComponents(url: url, resolvingAgainstBaseURL: false)?
+    return queryValue("path", in: url)
+  }
+
+  /// Page path from `repodocs://open?path=<repo path>&page=<doc path>`.
+  private static func page(from url: URL) -> String? {
+    queryValue("page", in: url)
+  }
+
+  private static func queryValue(_ name: String, in url: URL) -> String? {
+    URLComponents(url: url, resolvingAgainstBaseURL: false)?
       .queryItems?
-      .first { $0.name == "path" }?
+      .first { $0.name == name }?
       .value
   }
 }

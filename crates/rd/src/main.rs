@@ -266,7 +266,7 @@ fn run() -> Result<()> {
         Some(Cmd::Open { path }) => open_page(&store, &root, &path),
         Some(Cmd::Shorthand(args)) => {
             if args == ["."] {
-                open::repo(&root)
+                open::repo(&root, None)
             } else {
                 cat(&store, &args, false, false, None)
             }
@@ -658,13 +658,13 @@ fn export(store: &DocStore, dir: Option<PathBuf>) -> Result<()> {
 
 fn open_page(store: &DocStore, root: &Path, path: &str) -> Result<()> {
     if path == "." {
-        return open::repo(root);
+        return open::repo(root, None);
     }
     let pages = store.list_pages()?;
     if !pages.iter().any(|page| page.path == path) {
         return Err(StoreError::NotFound(path.to_string()).into());
     }
-    open::repo(root)
+    open::repo(root, Some(path))
 }
 
 /// Symlinks `~/.local/bin/rd` at this binary, the copy inside

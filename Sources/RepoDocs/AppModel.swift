@@ -151,6 +151,16 @@ final class AppModel {
     store = opened
     UserDefaults.standard.set(root.path, forKey: Self.repoKey)
     await refresh()
+    if let page = AppWindows.openRepos.takePendingPage(for: root.path) {
+      selectPage(page)
+    }
+  }
+
+  /// Select `path` if the repo has that page.
+  func selectPage(_ path: String) {
+    guard pages.contains(where: { $0.path == path }) else { return }
+    showPalette = false
+    selection = path
   }
 
   func refresh() async {
