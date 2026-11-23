@@ -1,13 +1,13 @@
 {
-  "originHash" : "a4275d84eb0db307d66303672a9cedd11a4f4cadb368da595c8c0e8e3bec9069",
+  "originHash" : "57a2011edc27cd44acec107b6727912d5c90814dbc1c4e7c77f3f66f2206cc40",
   "pins" : [
     {
       "identity" : "crumpet",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/octavore/crumpet",
       "state" : {
-        "branch" : "main",
-        "revision" : "cda6ef8bf47784e27c99e9c61a27de6dcd21c803"
+        "revision" : "f78772aa3e8840f1dbf27d05349b0a97a115c0ef",
+        "version" : "0.2.0"
       }
     },
     {
@@ -49,10 +49,10 @@
     {
       "identity" : "tree-sitter-markdown",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/tree-sitter-grammars/tree-sitter-markdown",
+      "location" : "https://github.com/octavore/tree-sitter-markdown",
       "state" : {
-        "revision" : "f969cd3ae3f9fbd4e43205431d0ae286014c05b5",
-        "version" : "0.5.3"
+        "revision" : "1aa6196e273518cf3d0fb582b0dab0c8a2ca4064",
+        "version" : "0.5.4-crumpet.1"
       }
     },
     {
