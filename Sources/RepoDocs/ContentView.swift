@@ -19,7 +19,9 @@ struct ContentView: View {
   /// the bar, and a deliberate scroll back up shows it again at any point in
   /// the document.
   @State private var showToolbar = true
-  @State private var columnVisibility = NavigationSplitViewVisibility.all
+  private var columnVisibility: NavigationSplitViewVisibility {
+    model.showSidebar ? .all : .detailOnly
+  }
   /// Drives the sidebar's `ideal` width instead of letting AppKit's
   /// window-state restoration set it. Restoration rounded the saved
   /// proportion to pixels with no cap, so the column grew wider on each
@@ -57,7 +59,11 @@ struct ContentView: View {
   }
 
   var body: some View {
-    NavigationSplitView(columnVisibility: $columnVisibility) {
+    NavigationSplitView(
+      columnVisibility: Binding(
+        get: { columnVisibility },
+        set: { model.showSidebar = $0 != .detailOnly })
+    ) {
       sidebar
     } detail: {
       detail
@@ -100,11 +106,21 @@ struct ContentView: View {
   }
 
   private var sidebar: some View {
-    List(selection: $model.selection) {
-      if let repoName = model.repo?.lastPathComponent {
-        Section(repoName) { sidebarRows }
-      } else {
-        sidebarRows
+    ScrollViewReader { proxy in
+      List(selection: $model.selection) {
+        if let repoName = model.repo?.lastPathComponent {
+          Section(repoName) { sidebarRows }
+        } else {
+          sidebarRows
+        }
+      }
+      // Scroll after the folders above the row have expanded.
+      .onChange(of: model.selection) { _, id in
+        guard let id else { return }
+        Task { @MainActor in
+          await Task.yield()
+          proxy.scrollTo(id)
+        }
       }
     }
     .contextMenu { newItemMenu(in: "") }
@@ -164,22 +180,39 @@ struct ContentView: View {
   /// The folder/page outline itself, without the enclosing repo-name section.
   @ViewBuilder
   private var sidebarRows: some View {
-    OutlineGroup(model.tree, children: \.children) { node in
-      Label(
-        node.name,
-        systemImage: node.isFolder ? "folder" : "doc.text")
-        .foregroundStyle(node.isFolder ? .secondary : .primary)
-        .tag(node.id)
-        .contextMenu {
-          newItemMenu(in: node.folderPrefix)
-          Divider()
-          Button("Copy Path") {
-            let path = node.page?.path ?? node.folderPrefix
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(path, forType: .string)
-          }
+    ForEach(model.tree) { node in sidebarNode(node) }
+  }
+
+  /// One outline row. Folders expand through `AppModel.expandedFolders`, so
+  /// opening a page from outside the sidebar can reveal it.
+  private func sidebarNode(_ node: DocNode) -> AnyView {
+    let label = Label(
+      node.name,
+      systemImage: node.isFolder ? "folder" : "doc.text")
+      .foregroundStyle(node.isFolder ? .secondary : .primary)
+      .tag(node.id)
+      .id(node.id)
+      .contextMenu {
+        newItemMenu(in: node.folderPrefix)
+        Divider()
+        Button("Copy Path") {
+          let path = node.page?.path ?? node.folderPrefix
+          NSPasteboard.general.clearContents()
+          NSPasteboard.general.setString(path, forType: .string)
         }
-    }
+      }
+    guard let children = node.children else { return AnyView(label) }
+    let expanded = Binding(
+      get: { model.expandedFolders.contains(node.id) },
+      set: { isOn in
+        if isOn { model.expandedFolders.insert(node.id) } else { model.expandedFolders.remove(node.id) }
+      })
+    return AnyView(
+      DisclosureGroup(isExpanded: expanded) {
+        ForEach(children) { child in sidebarNode(child) }
+      } label: {
+        label
+      })
   }
 
   private var detail: some View {
@@ -210,6 +243,9 @@ struct ContentView: View {
     }
     .animation(.easeOut(duration: 0.2), value: showToolbar)
     .animation(.easeOut(duration: 0.12), value: model.showPalette)
+    // Fills the column so the bar is top-aligned from the first layout pass.
+    // Without it, the stack is sized to its content at launch and centered.
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     // A hidden title bar still reserves its safe area. Reclaim it so the bar
     // starts at the window's own top edge; the bar *is* this window's title
     // bar, and the document scrolls under it from there.
@@ -295,7 +331,7 @@ struct ContentView: View {
         // leading inset, so the bar slides with the sidebar instead of the
         // inset animating on its own while the bar's width jumps.
         withAnimation(Self.sidebarAnimation) {
-          columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
+          model.showSidebar.toggle()
         }
       } label: {
         Image(systemName: "sidebar.leading")

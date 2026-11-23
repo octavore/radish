@@ -20,7 +20,18 @@ final class AppModel {
   /// lists these for an empty query and passes them to `fuzzyMatch`, which
   /// keeps this order between equal scores.
   private(set) var recentPaths: [String] = []
-  var showInspector = true
+  /// Visibility of the right sidebar. Persisted across launches.
+  var showInspector = UserDefaults.standard.object(forKey: AppModel.showInspectorKey) as? Bool ?? true {
+    didSet { UserDefaults.standard.set(showInspector, forKey: Self.showInspectorKey) }
+  }
+  /// Visibility of the left sidebar. Persisted across launches.
+  var showSidebar = UserDefaults.standard.object(forKey: AppModel.showSidebarKey) as? Bool ?? true {
+    didSet { UserDefaults.standard.set(showSidebar, forKey: Self.showSidebarKey) }
+  }
+  /// Sidebars that were visible when `toggleSidebars` last hid them.
+  private var hiddenSidebars: (left: Bool, right: Bool)?
+  /// IDs of the folder rows expanded in the left sidebar.
+  var expandedFolders: Set<String> = []
   var showPalette = false
   var errorMessage: String?
 
@@ -45,6 +56,22 @@ final class AppModel {
   private var store: DocStore?
   private var openGeneration = 0
   private static let repoKey = "repoURL"
+  private static let showInspectorKey = "showInspector"
+  private static let showSidebarKey = "showSidebar"
+
+  /// Hide every visible sidebar. If none is visible, restore the sidebars
+  /// hidden last time, or both if there are none.
+  func toggleSidebars() {
+    if showSidebar || showInspector {
+      hiddenSidebars = (showSidebar, showInspector)
+      showSidebar = false
+      showInspector = false
+    } else {
+      let previous = hiddenSidebars ?? (true, true)
+      showSidebar = previous.left
+      showInspector = previous.right
+    }
+  }
 
   /// Reopens the repository from the last session. Kept out of `init` on
   /// purpose: `init` runs every time SwiftUI re-creates the owning view, and a
@@ -160,7 +187,19 @@ final class AppModel {
   func selectPage(_ path: String) {
     guard pages.contains(where: { $0.path == path }) else { return }
     showPalette = false
+    showSidebar = true
+    reveal(path)
     selection = path
+  }
+
+  /// Expand every folder above `path` in the sidebar.
+  func reveal(_ path: String) {
+    let parts = path.split(separator: "/").dropLast()
+    var prefix = ""
+    for part in parts {
+      prefix += "\(part)/"
+      expandedFolders.insert("folder:\(prefix)")
+    }
   }
 
   func refresh() async {
@@ -335,6 +374,7 @@ final class AppModel {
   /// Like a sidebar click, this discards unsaved edits to the current page.
   func openFromPalette(_ path: String) {
     showPalette = false
+    reveal(path)
     selection = path
   }
 

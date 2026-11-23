@@ -149,6 +149,7 @@ struct RepoDocsApp: App {
       }
       CommandGroup(after: .toolbar) {
         ReloadCommand()
+        ToggleSidebarsCommand()
       }
       CommandGroup(after: .textEditing) {
         FindCommands()
@@ -319,6 +320,30 @@ struct ReloadCommand: View {
     Button("Reload Pages") { Task { await model?.reload() } }
       .keyboardShortcut("r")
       .disabled(model?.repo == nil)
+  }
+}
+
+/// View ▸ Toggle Sidebars. Hides every visible sidebar, or restores the ones
+/// hidden last time.
+struct ToggleSidebarsCommand: View {
+  @FocusedValue(\.appModel) private var model
+
+  var body: some View {
+    Button("Toggle Sidebars") {
+      withAnimation(.easeOut(duration: 0.25)) { model?.toggleSidebars() }
+    }
+    .keyboardShortcut("`", modifiers: .control)
+    .disabled(model == nil)
+    Button("Toggle Left Sidebar") {
+      withAnimation(.easeOut(duration: 0.25)) { model?.showSidebar.toggle() }
+    }
+    .keyboardShortcut("1", modifiers: .control)
+    .disabled(model == nil)
+    Button("Toggle Right Sidebar") {
+      withAnimation(.easeOut(duration: 0.25)) { model?.showInspector.toggle() }
+    }
+    .keyboardShortcut("2", modifiers: .control)
+    .disabled(model == nil)
   }
 }
 
