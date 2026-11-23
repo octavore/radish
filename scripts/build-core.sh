@@ -19,6 +19,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 root=$(pwd)
 
+# Match Package.swift's platform. Without this, C dependencies such as blake3
+# are compiled for the SDK's macOS version and Swift linking will warn.
+export MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-15.0}
+
 archs=${ARCHS:-$(uname -m)}
 out="$root/target/uniffi"
 mkdir -p "$out"
