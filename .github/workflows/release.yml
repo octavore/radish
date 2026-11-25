@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build Rust core
+        run: scripts/build-core.sh
+
+      - name: Strudel release
+        id: strudel
+        uses: octavore/strudel-release-action@v1
+        with:
+          strudel-version: 'v0.8.0'
+          apple-api-key-contents: ${{ secrets.APPLE_API_KEY_CONTENTS }}
+          apple-certificate: ${{ secrets.APPLE_CERTIFICATE }}
+          apple-certificate-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          apple-team-id: ${{ vars.APPLE_TEAM_ID }}
+          apple-api-issuer: ${{ vars.APPLE_API_ISSUER }}
+          apple-api-key: ${{ vars.APPLE_API_KEY }}
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: ${{ steps.strudel.outputs.dmg-path }}
+
+  linux:
+    uses: ./.github/workflows/linux.yml
+
+  linux-publish:
+    needs: [release, linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rd-*
+          path: dist
+          merge-multiple: true
+
+      - name: Upload to draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: dist/*
