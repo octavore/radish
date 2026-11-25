@@ -8,7 +8,8 @@ build_number = "1"
 info_json_path = "info.json"  # registers the radish:// URL scheme, see open.rs
 
 [build.icon]
-src        = "treasure-chest.png"
+src        = "resources/radish.png"
+scale      = 1.2
 background = "#3d2817"
 
 # The `rd` CLI, built from crates/rd by scripts/build-core.sh. It rides along in
