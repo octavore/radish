@@ -53,9 +53,10 @@ struct InspectorView: View {
         }
         .formStyle(.grouped)
       } else {
-        ContentUnavailableView(
-          "No page selected", systemImage: "info.circle",
-          description: Text("Folders are path prefixes, not stored objects, so they have no OID."))
+        Text("No page selected")
+          .font(.callout)
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
       }
     }
     .textSelection(.enabled)

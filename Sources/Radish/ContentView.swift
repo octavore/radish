@@ -9,7 +9,8 @@ struct ContentView: View {
   @AppStorage(AppSettings.themeKey) private var theme = EditorTheme.system
   @AppStorage(AppSettings.appearanceKey) private var appearance = EditorAppearance.system
   @AppStorage(AppSettings.customColorsKey) private var customColors = EditorCustomColors()
-  @AppStorage(AppSettings.editorSettingsKey) private var editorSettings = AppSettings.defaultEditorSettings
+  @AppStorage(AppSettings.editorSettingsKey) private var editorSettings = AppSettings
+    .defaultEditorSettings
   @State private var isNaming = false
   @State private var newPath = ""
   @State private var isNamingFolder = false
@@ -59,29 +60,17 @@ struct ContentView: View {
   }
 
   var body: some View {
-    NavigationSplitView(
-      columnVisibility: Binding(
-        get: { columnVisibility },
-        set: { model.showSidebar = $0 != .detailOnly })
-    ) {
-      sidebar
-    } detail: {
-      detail
+    Group {
+      if model.repo == nil {
+        noRepository
+      } else {
+        workspace
+      }
     }
     // Still set even though `.hiddenTitleBar` draws no title: it names the
     // window in the Window menu and the ⌘-Tab window switcher.
     .navigationTitle(title)
     .navigationSubtitle(model.status)
-    .inspector(isPresented: $model.showInspector) {
-      InspectorView(info: model.info) { revision in
-        Task { await model.showDiff(against: revision) }
-      }
-      .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
-      // The hidden title bar still reserves its safe area at the top of the
-      // inspector column, pushing the first section down. Reclaim it so the
-      // content starts flush under the window's top edge.
-      .ignoresSafeArea(.container, edges: .top)
-    }
     .sheet(isPresented: $isNaming) { newPageSheet }
     .sheet(isPresented: $isNamingFolder) { newFolderSheet }
     .sheet(
@@ -105,6 +94,40 @@ struct ContentView: View {
     }
   }
 
+  /// Only content shown until a repository is chosen.
+  private var noRepository: some View {
+    ContentUnavailableView {
+      Label("No repository selected", systemImage: "folder.badge.questionmark")
+    } description: {
+      Text("Open a git repository to manage docs for.")
+    } actions: {
+      Button("Choose…") { model.chooseRepo() }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+
+  private var workspace: some View {
+    NavigationSplitView(
+      columnVisibility: Binding(
+        get: { columnVisibility },
+        set: { model.showSidebar = $0 != .detailOnly })
+    ) {
+      sidebar
+    } detail: {
+      detail
+    }
+    .inspector(isPresented: $model.showInspector) {
+      InspectorView(info: model.info) { revision in
+        Task { await model.showDiff(against: revision) }
+      }
+      .inspectorColumnWidth(min: 240, ideal: 280, max: 360)
+      // The hidden title bar still reserves its safe area at the top of the
+      // inspector column, pushing the first section down. Reclaim it so the
+      // content starts flush under the window's top edge.
+      .ignoresSafeArea(.container, edges: .top)
+    }
+  }
+
   private var sidebar: some View {
     ScrollViewReader { proxy in
       List(selection: $model.selection) {
@@ -125,15 +148,7 @@ struct ContentView: View {
     }
     .contextMenu { newItemMenu(in: "") }
     .overlay {
-      if model.repo == nil {
-        ContentUnavailableView {
-          Label("No repository", systemImage: "folder.badge.questionmark")
-        } description: {
-          Text("Choose a git repository to store docs in.")
-        } actions: {
-          Button("Choose…") { model.chooseRepo() }
-        }
-      } else if model.pages.isEmpty {
+      if model.pages.isEmpty {
         ContentUnavailableView(
           "No pages", systemImage: "doc.text",
           description: Text("Create one to get started."))
@@ -141,14 +156,17 @@ struct ContentView: View {
     }
     .navigationSplitViewColumnWidth(
       min: Self.sidebarWidthRange.lowerBound, ideal: sidebarWidth,
-      max: Self.sidebarWidthRange.upperBound)
+      max: Self.sidebarWidthRange.upperBound
+    )
     // NavigationSplitView adds its own toggle at the sidebar's top edge, which
     // duplicates `docToolbar`'s. The floating bar owns that job.
     .toolbar(removing: .sidebarToggle)
     .safeAreaInset(edge: .bottom, spacing: 0) { sidebarFooter }
     // Stores the user's manual resizes in `sidebarWidth`, clamped to the
     // column's range. Widths seen while the sidebar is collapsed are skipped.
-    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { newWidth in
+    .onGeometryChange(for: CGFloat.self) {
+      $0.size.width
+    } action: { newWidth in
       guard columnVisibility != .detailOnly else { return }
       let range = Self.sidebarWidthRange
       sidebarWidth = min(max(newWidth, range.lowerBound), range.upperBound)
@@ -188,24 +206,29 @@ struct ContentView: View {
   private func sidebarNode(_ node: DocNode) -> AnyView {
     let label = Label(
       node.name,
-      systemImage: node.isFolder ? "folder" : "doc.text")
-      .foregroundStyle(node.isFolder ? .secondary : .primary)
-      .tag(node.id)
-      .id(node.id)
-      .contextMenu {
-        newItemMenu(in: node.folderPrefix)
-        Divider()
-        Button("Copy Path") {
-          let path = node.page?.path ?? node.folderPrefix
-          NSPasteboard.general.clearContents()
-          NSPasteboard.general.setString(path, forType: .string)
-        }
+      systemImage: node.isFolder ? "folder" : "doc.text"
+    )
+    .foregroundStyle(node.isFolder ? .secondary : .primary)
+    .tag(node.id)
+    .id(node.id)
+    .contextMenu {
+      newItemMenu(in: node.folderPrefix)
+      Divider()
+      Button("Copy Path") {
+        let path = node.page?.path ?? node.folderPrefix
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(path, forType: .string)
       }
+    }
     guard let children = node.children else { return AnyView(label) }
     let expanded = Binding(
       get: { model.expandedFolders.contains(node.id) },
       set: { isOn in
-        if isOn { model.expandedFolders.insert(node.id) } else { model.expandedFolders.remove(node.id) }
+        if isOn {
+          model.expandedFolders.insert(node.id)
+        } else {
+          model.expandedFolders.remove(node.id)
+        }
       })
     return AnyView(
       DisclosureGroup(isExpanded: expanded) {
@@ -270,10 +293,13 @@ struct ContentView: View {
           scrollTracker.reset()
           showToolbar = true
         }
-    } else {
+    } else if !model.pages.isEmpty {
+      // The sidebar already explains an empty repository. Inset below the doc bar so the content centers in the visible area.
       ContentUnavailableView(
         "Nothing selected", systemImage: "doc.text",
-        description: Text("Pick a page from the sidebar."))
+        description: Text("Pick a page from the sidebar.")
+      )
+      .padding(.top, Self.toolbarHeight)
     }
   }
 
@@ -422,9 +448,11 @@ struct ContentView: View {
   private var newFolderSheet: some View {
     VStack(alignment: .leading, spacing: 12) {
       Text("New folder").font(.headline)
-      Text("A folder path, e.g. `design/proposals`. It isn't saved until a page is added inside it.")
-        .font(.caption)
-        .foregroundStyle(.secondary)
+      Text(
+        "A folder path, e.g. `design/proposals`. It isn't saved until a page is added inside it."
+      )
+      .font(.caption)
+      .foregroundStyle(.secondary)
       TextField("design/proposals", text: $newFolderPath)
         .textFieldStyle(.roundedBorder)
         .frame(width: 320)
