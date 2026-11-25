@@ -23,16 +23,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Install musl toolchain
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
+      - uses: mlugg/setup-zig@v2
+
+      - name: Install cargo-zigbuild
+        run: cargo install --locked cargo-zigbuild
 
       - name: Add Rust target
         run: rustup target add ${{ matrix.target }}
 
       - name: Build rd
-        run: cargo build --release -p rd --target ${{ matrix.target }}
+        run: cargo zigbuild --release -p rd --target ${{ matrix.target }}
 
       - name: Smoke test
         run: target/${{ matrix.target }}/release/rd --help
