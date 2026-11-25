@@ -1,18 +1,18 @@
 [app]
-name         = "RepoDocs"
-bundle_id    = "com.breakfastlabs.repodocs"
+name         = "Radish"
+bundle_id    = "com.breakfastlabs.radish"
 version      = "0.1.0"
 build_number = "1"
 
 [build]
-info_json_path = "info.json"  # registers the repodocs:// URL scheme, see open.rs
+info_json_path = "info.json"  # registers the radish:// URL scheme, see open.rs
 
 [build.icon]
 src        = "treasure-chest.png"
 background = "#3d2817"
 
 # The `rd` CLI, built from crates/rd by scripts/build-core.sh. It rides along in
-# the bundle so RepoDocs ▸ Install 'rd' Command Line Tool has something to
+# the bundle so Radish ▸ Install 'rd' Command Line Tool has something to
 # symlink into ~/.local/bin (see CLIInstaller).
 [[build.copy]]
 src      = "target/uniffi/rd"

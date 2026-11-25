@@ -1,4 +1,4 @@
-import RepoDocsCore
+import RadishCore
 import SwiftUI
 
 /// Shows where the selected page actually lives in git. The point is to make

@@ -1,6 +1,6 @@
 import AppKit
 import Crumpet
-import RepoDocsCore
+import RadishCore
 import SwiftUI
 
 struct ContentView: View {
@@ -25,7 +25,7 @@ struct ContentView: View {
   /// Drives the sidebar's `ideal` width instead of letting AppKit's
   /// window-state restoration set it. Restoration rounded the saved
   /// proportion to pixels with no cap, so the column grew wider on each
-  /// relaunch. See `NSWindow.isRestorable = false` in `RepoDocsApp`.
+  /// relaunch. See `NSWindow.isRestorable = false` in `RadishApp`.
   @AppStorage("sidebarWidth") private var sidebarWidth: Double = 220
   /// The last offset `handleScroll` saw, and how far the current unbroken run
   /// in one direction has travelled. Plain properties on a class box, not
@@ -55,7 +55,7 @@ struct ContentView: View {
     if let path = selectedPath {
       return (path as NSString).lastPathComponent
     }
-    return model.repo?.lastPathComponent ?? "RepoDocs"
+    return model.repo?.lastPathComponent ?? "Radish"
   }
 
   var body: some View {

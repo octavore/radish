@@ -6,7 +6,7 @@ enum CLIInstallError: Error, LocalizedError {
 
   var errorDescription: String? {
     switch self {
-    case .missingBundledTool: "This copy of RepoDocs has no bundled 'rd' to install"
+    case .missingBundledTool: "This copy of Radish has no bundled 'rd' to install"
     case .pathNotWritable(let path): "Couldn't create \(path)"
     }
   }

@@ -1,8 +1,8 @@
 {
   "CFBundleURLTypes": [
     {
-      "CFBundleURLName": "com.breakfastlabs.repo-docs",
-      "CFBundleURLSchemes": ["repodocs"]
+      "CFBundleURLName": "com.breakfastlabs.radish",
+      "CFBundleURLSchemes": ["radish"]
     }
   ]
 }

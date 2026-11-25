@@ -1,4 +1,4 @@
-# repo-docs
+# radish
 
 A macOS app for writing and reading markdown that lives **in** a git repo but never in its working tree. Docs are stored in their own refs, so they travel with the repo, show up in no `git status`, and add no noise to a PR diff.
 
@@ -13,7 +13,7 @@ There are two front ends over one storage layer: the app, and `rd`, a terminal c
 
 ```sh
 axo core      # build the Rust core, regenerate the Swift bindings
-axo build     # axo core, then strudel build -> .build/dist/RepoDocs.app
+axo build     # axo core, then strudel build -> .build/dist/Radish.app
 axo run       # build and launch
 axo test      # cargo test
 axo cli       # just the `rd` binary
@@ -41,7 +41,7 @@ rd install               # symlink ~/.local/bin/rd
 rd agent                 # usage notes for AI agents
 ```
 
-`rd` ships inside `RepoDocs.app/Contents/MacOS/`; RepoDocs ▸ Install 'rd' Command Line Tool symlinks it onto your PATH.
+`rd` ships inside `Radish.app/Contents/MacOS/`; Radish ▸ Install 'rd' Command Line Tool symlinks it onto your PATH.
 
 ### Shell completion
 

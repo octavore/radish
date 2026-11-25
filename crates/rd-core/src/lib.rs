@@ -1,7 +1,7 @@
 //! Git-backed storage for markdown held outside a repository's working tree.
 //!
 //! One implementation, two consumers: the `rd` CLI links this as an ordinary
-//! Rust crate, and the RepoDocs SwiftUI app links the staticlib through the
+//! Rust crate, and the Radish SwiftUI app links the staticlib through the
 //! UniFFI bindings generated from these `#[uniffi::export]` items. Everything
 //! the spec in `docs/STORAGE.md` describes lives here, so the app and the CLI
 //! stay in sync.

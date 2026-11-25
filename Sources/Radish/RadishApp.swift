@@ -117,7 +117,7 @@ struct WindowAccessor: NSViewRepresentable {
 /// `Contents/MacOS/rd` (see `CLIInstaller`), so this executable no longer has
 /// to decide at launch whether it's a terminal tool or an app.
 @main
-struct RepoDocsApp: App {
+struct RadishApp: App {
   var body: some Scene {
     // The model lives in RootView, not here, so every window (and therefore
     // every tab) owns an independent repo. Hoisting it to App would make ⌘N
@@ -162,7 +162,7 @@ struct RepoDocsApp: App {
   }
 }
 
-/// RepoDocs ▸ Install 'rd' Command Line Tool. Symlinks the `rd` binary bundled
+/// Radish ▸ Install 'rd' Command Line Tool. Symlinks the `rd` binary bundled
 /// alongside this app to `~/.local/bin/rd`, mirroring how `code`/`subl` install
 /// their shell helpers.
 struct InstallCLICommand: View {
@@ -261,7 +261,7 @@ struct RootView: View {
           }
         }
       }
-      // Delivers `repodocs://` URLs to an existing window instead of a new one.
+      // Delivers `radish://` URLs to an existing window instead of a new one.
       .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
   }
 
@@ -270,13 +270,13 @@ struct RootView: View {
     AppWindows.openRepos.register(repo.path, window: window, model: model)
   }
 
-  /// Parses `repodocs://open?path=<repo path>`, as sent by `rd open .`/`rd .`.
+  /// Parses `radish://open?path=<repo path>`, as sent by `rd open .`/`rd .`.
   private static func repoPath(from url: URL) -> String? {
-    guard url.scheme == "repodocs", url.host == "open" else { return nil }
+    guard url.scheme == "radish", url.host == "open" else { return nil }
     return queryValue("path", in: url)
   }
 
-  /// Page path from `repodocs://open?path=<repo path>&page=<doc path>`.
+  /// Page path from `radish://open?path=<repo path>&page=<doc path>`.
   private static func page(from url: URL) -> String? {
     queryValue("page", in: url)
   }

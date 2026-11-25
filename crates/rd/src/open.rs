@@ -1,4 +1,4 @@
-//! Handing a repository to the RepoDocs app.
+//! Handing a repository to the Radish app.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -6,7 +6,7 @@ use std::process::Command;
 use anyhow::{anyhow, Context, Result};
 
 /// Points the GUI app at `root` and brings it to the front, by delivering a
-/// `repodocs://` URL naming it.
+/// `radish://` URL naming it.
 ///
 /// A plain `open <bundle>` on an already-running app just re-activates it
 /// without telling it anything changed, since the app's model is built once per
@@ -16,9 +16,9 @@ use anyhow::{anyhow, Context, Result};
 ///
 /// A `page` is a doc path to select once the repo is open.
 pub fn repo(root: &Path, page: Option<&str>) -> Result<()> {
-    let app = bundle().ok_or_else(|| anyhow!("can't find RepoDocs.app to launch"))?;
+    let app = bundle().ok_or_else(|| anyhow!("can't find Radish.app to launch"))?;
     let mut url = format!(
-        "repodocs://open?path={}",
+        "radish://open?path={}",
         percent_encode(&root.to_string_lossy())
     );
     if let Some(page) = page {
@@ -27,7 +27,7 @@ pub fn repo(root: &Path, page: Option<&str>) -> Result<()> {
     }
 
     // `-a <bundle>` targets this exact app bundle directly, rather than relying
-    // on `repodocs://` already being registered with LaunchServices (which can
+    // on `radish://` already being registered with LaunchServices (which can
     // lag right after a fresh local build).
     Command::new("/usr/bin/open")
         .arg("-a")

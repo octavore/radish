@@ -1,5 +1,5 @@
 import AppKit
-import RepoDocsCore
+import RadishCore
 import SwiftUI
 
 /// The Go to Page palette: a search field over a fuzzy-ranked list of page

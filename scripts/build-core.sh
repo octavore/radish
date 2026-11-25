@@ -4,9 +4,9 @@
 #
 # Everything the Swift app needs from Rust lands in target/uniffi/:
 #
-#   librd_core.a                              linked by the RepoDocs target
+#   librd_core.a                              linked by the Radish target
 #   rd                                        copied into the app bundle
-#   Sources/RepoDocsCore/rd_core.swift        generated bindings
+#   Sources/RadishCore/rd_core.swift        generated bindings
 #   Sources/rd_coreFFI/include/rd_coreFFI.h   generated C header
 #   Sources/rd_coreFFI/include/module.modulemap
 #
@@ -76,8 +76,8 @@ cargo run --release --quiet -p rd-core --bin uniffi-bindgen --target "${triples[
   generate --library "$root/target/${triples[0]}/release/librd_core.dylib" \
   --language swift --no-format --out-dir "$staging"
 
-mkdir -p "$root/Sources/RepoDocsCore" "$root/Sources/rd_coreFFI/include"
-mv "$staging/rd_core.swift" "$root/Sources/RepoDocsCore/rd_core.swift"
+mkdir -p "$root/Sources/RadishCore" "$root/Sources/rd_coreFFI/include"
+mv "$staging/rd_core.swift" "$root/Sources/RadishCore/rd_core.swift"
 mv "$staging/rd_coreFFI.h" "$root/Sources/rd_coreFFI/include/rd_coreFFI.h"
 # uniffi emits a modulemap named after the crate; SwiftPM only looks for
 # module.modulemap inside a target's include directory.

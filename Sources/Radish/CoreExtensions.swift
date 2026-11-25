@@ -1,7 +1,7 @@
 import Foundation
-import RepoDocsCore
+import RadishCore
 
-// Conveniences over the UniFFI-generated types in `RepoDocsCore`: identity for
+// Conveniences over the UniFFI-generated types in `RadishCore`: identity for
 // SwiftUI, and error text for alerts. The storage behaviour itself lives in
 // Rust, in `crates/rd-core`.
 

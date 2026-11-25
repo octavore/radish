@@ -1,4 +1,4 @@
-//! Ported from `Tests/RepoDocsTests/DocStoreTests.swift`.
+//! Ported from `Tests/RadishTests/DocStoreTests.swift`.
 
 use rd_core::store::{pages_upstream, PAGES_REF};
 use rd_core::{DocStore, Git, MergeResult, StoreError};
@@ -14,7 +14,7 @@ struct Fixture {
 
 fn fixture() -> Fixture {
     let dir = tempfile::Builder::new()
-        .prefix("repo-docs-test-")
+        .prefix("radish-test-")
         .tempdir()
         .unwrap();
     let root = dir.path().to_path_buf();
@@ -576,7 +576,7 @@ fn page_commits_carry_the_repo_commit_trailer() {
 #[test]
 fn writing_works_on_an_unborn_branch() {
     let dir = tempfile::Builder::new()
-        .prefix("repo-docs-unborn-")
+        .prefix("radish-unborn-")
         .tempdir()
         .unwrap();
     let git = Git::new(dir.path());
@@ -726,7 +726,7 @@ fn merge_reads_the_named_remotes_mirror() {
 #[test]
 fn opening_a_non_repository_errors() {
     let dir = tempfile::Builder::new()
-        .prefix("repo-docs-bare-")
+        .prefix("radish-bare-")
         .tempdir()
         .unwrap();
     assert!(DocStore::new(dir.path().display().to_string()).is_err());

@@ -165,7 +165,7 @@ struct TempIndex {
 impl TempIndex {
     fn new() -> Result<Self> {
         let file = tempfile::Builder::new()
-            .prefix("repo-docs-index-")
+            .prefix("radish-index-")
             .tempfile()?;
         // Keep the unique name, drop the file itself: git wants to create it.
         let (_, path) = file

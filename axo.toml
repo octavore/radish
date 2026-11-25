@@ -1,4 +1,4 @@
-project_name = "repo-docs"
+project_name = "radish"
 
 [tasks]
 core = "scripts/build-core.sh"

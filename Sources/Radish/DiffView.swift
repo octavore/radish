@@ -1,4 +1,4 @@
-import RepoDocsCore
+import RadishCore
 import SwiftUI
 
 /// Renders a unified diff (as produced by `git diff --no-color`) with

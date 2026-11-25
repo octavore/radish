@@ -1,6 +1,6 @@
 import AppKit
 import Foundation
-import RepoDocsCore
+import RadishCore
 import SwiftUI
 
 @MainActor

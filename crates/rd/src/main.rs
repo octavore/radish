@@ -1,6 +1,6 @@
 //! `rd`: read and write a repository's docs from a terminal.
 //!
-//! Every storage operation goes through `rd_core`, the same crate the RepoDocs
+//! Every storage operation goes through `rd_core`, the same crate the Radish
 //! app links through UniFFI, so the CLI and the GUI stay in sync.
 
 mod agent;
@@ -147,7 +147,7 @@ enum Cmd {
     Grep(grep::GrepArgs),
     /// Dump every doc to a directory (default: a fresh tmpdir)
     Export { dir: Option<PathBuf> },
-    /// Open a doc, or '.' for the current repo, in the RepoDocs app
+    /// Open a doc, or '.' for the current repo, in the Radish app
     Open {
         #[arg(add = ArgValueCompleter::new(complete::doc_path))]
         path: String,
@@ -668,7 +668,7 @@ fn open_page(store: &DocStore, root: &Path, path: &str) -> Result<()> {
 }
 
 /// Symlinks `~/.local/bin/rd` at this binary, the copy inside
-/// `RepoDocs.app/Contents/MacOS` when `rd` ships with the app.
+/// `Radish.app/Contents/MacOS` when `rd` ships with the app.
 fn install() -> Result<()> {
     let target = std::env::current_exe()
         .context("determining rd's own path")?

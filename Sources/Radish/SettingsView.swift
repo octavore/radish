@@ -1,7 +1,7 @@
 import Crumpet
 import SwiftUI
 
-/// RepoDocs ▸ Settings (⌘,). A `TabView` shell, per the macOS app checklist:
+/// Radish ▸ Settings (⌘,). A `TabView` shell, per the macOS app checklist:
 /// one `Label` per tab, a fixed frame, top-aligned content. Every value is
 /// persisted via `@AppStorage` under keys `ContentView` reads directly, so a
 /// change here restyles every open window's editor live.
@@ -24,7 +24,7 @@ struct SettingsView: View {
         .frame(width: 460, height: 440, alignment: .top)
         .tabItem { Label("Typography", systemImage: "textformat.size") }
     }
-    .navigationTitle("RepoDocs Settings")
+    .navigationTitle("Radish Settings")
   }
 }
 
@@ -152,7 +152,7 @@ enum AppSettings {
   /// scenes with no shared state, and every open window's editor subscribes.
   @MainActor static let editorChannel = EditorSettingsChannel()
 
-  /// Seed for a fresh install: RepoDocs opens in monospaced at 14pt, matching
+  /// Seed for a fresh install: Radish opens in monospaced at 14pt, matching
   /// the fixed styling it used before the settings became tunable.
   static let defaultEditorSettings = EditorSettings(font: .monospaced, fontSize: 14)
 }

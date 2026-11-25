@@ -8,24 +8,24 @@ import PackageDescription
 let packageDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
 
 let package = Package(
-    name: "RepoDocs",
+    name: "Radish",
     platforms: [.macOS(.v15)],
     dependencies: [
         .package(url: "https://github.com/octavore/crumpet", from: "0.2.0"),
     ],
     targets: [
         // The generated C header and modulemap for the Rust core. Both, and the
-        // Swift bindings in RepoDocsCore, are produced by
+        // Swift bindings in RadishCore, are produced by
         // `scripts/build-core.sh` (`axo core`) and are not checked in.
         .target(name: "rd_coreFFI"),
-        .target(name: "RepoDocsCore", dependencies: ["rd_coreFFI"]),
+        .target(name: "RadishCore", dependencies: ["rd_coreFFI"]),
         .executableTarget(
-            name: "RepoDocs",
+            name: "Radish",
             dependencies: [
-                "RepoDocsCore",
+                "RadishCore",
                 .product(name: "Crumpet", package: "crumpet"),
             ],
-            path: "Sources/RepoDocs",
+            path: "Sources/Radish",
             linkerSettings: [
                 .unsafeFlags(["-L\(packageDir)/target/uniffi", "-lrd_core"])
             ]
