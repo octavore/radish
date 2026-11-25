@@ -5,7 +5,12 @@ use std::process::{Command, Stdio};
 
 use crate::error::{Result, StoreError};
 
+/// Git executable. macOS uses the system git. Other platforms resolve it from
+/// PATH.
+#[cfg(target_os = "macos")]
 const GIT: &str = "/usr/bin/git";
+#[cfg(not(target_os = "macos"))]
+const GIT: &str = "git";
 
 /// Raw result of one git invocation.
 pub struct Output {
