@@ -16,7 +16,7 @@ path = "uniffi-bindgen.rs"
 
 [dependencies]
 nucleo-matcher = "0.3.1"
-rumdl = "0.2.62"
+rumdl = "0.3.6"
 tempfile.workspace = true
 thiserror.workspace = true
 uniffi = { workspace = true, features = ["cli"] }
